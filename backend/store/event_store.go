@@ -7,30 +7,32 @@ import (
 	"github.com/Mario-Miguel/folixenda/backend/models"
 )
 
-var ErrNotFound = errors.New("event not found")
-
-// Store is a thread-safe in-memory event store.
-type Store struct {
-	mu     sync.RWMutex
-	events map[string]*models.Event
-	order  []string // preserves insertion order
+// EventStore is the interface that any event persistence backend must satisfy.
+// Swap MemoryEventStore for a PostgresEventStore in main.go without touching handler code.
+type EventStore interface {
+	List(date, category string) ([]*models.Event, error)
+	Get(id string) (*models.Event, error)
+	Create(e *models.Event) error
+	Update(e *models.Event) error
+	Delete(id string) error
 }
 
-func New() *Store {
-	s := &Store{
-		events: make(map[string]*models.Event),
-	}
+type MemoryEventStore struct {
+	mu     sync.RWMutex
+	events map[string]*models.Event
+}
+
+func NewMemoryEventStore() *MemoryEventStore {
+	s := &MemoryEventStore{events: make(map[string]*models.Event)}
 	s.seed()
 	return s
 }
 
-func (s *Store) List(date, category string) ([]*models.Event, error) {
+func (s *MemoryEventStore) List(date, category string) ([]*models.Event, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
 	var result []*models.Event
-	for _, id := range s.order {
-		e := s.events[id]
+	for _, e := range s.events {
 		if date != "" && e.Date != date {
 			continue
 		}
@@ -42,10 +44,9 @@ func (s *Store) List(date, category string) ([]*models.Event, error) {
 	return result, nil
 }
 
-func (s *Store) Get(id string) (*models.Event, error) {
+func (s *MemoryEventStore) Get(id string) (*models.Event, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
 	e, ok := s.events[id]
 	if !ok {
 		return nil, ErrNotFound
@@ -53,19 +54,37 @@ func (s *Store) Get(id string) (*models.Event, error) {
 	return e, nil
 }
 
-func (s *Store) Create(e *models.Event) error {
+func (s *MemoryEventStore) Create(e *models.Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if _, exists := s.events[e.ID]; exists {
 		return errors.New("event already exists")
 	}
 	s.events[e.ID] = e
-	s.order = append(s.order, e.ID)
 	return nil
 }
 
-func (s *Store) seed() {
+func (s *MemoryEventStore) Update(e *models.Event) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.events[e.ID]; !ok {
+		return ErrNotFound
+	}
+	s.events[e.ID] = e
+	return nil
+}
+
+func (s *MemoryEventStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.events[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.events, id)
+	return nil
+}
+
+func (s *MemoryEventStore) seed() {
 	events := []*models.Event{
 		{
 			ID:          "1",
@@ -179,9 +198,7 @@ func (s *Store) seed() {
 			Price:       40,
 		},
 	}
-
 	for _, e := range events {
 		s.events[e.ID] = e
-		s.order = append(s.order, e.ID)
 	}
 }

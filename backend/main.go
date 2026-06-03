@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Mario-Miguel/folixenda/backend/database"
 	"github.com/Mario-Miguel/folixenda/backend/handlers"
 	"github.com/Mario-Miguel/folixenda/backend/store"
 )
@@ -22,11 +23,27 @@ func main() {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	s := store.New()
-	eventsHandler := handlers.NewEventsHandler(s)
+	database.Init(".env")
+
+	eventStore, err := store.NewPostgresEventStore(database.DB)
+	if err != nil {
+		logger.Error("failed to init event store", "err", err)
+		os.Exit(1)
+	}
+	userStore, err := store.NewPostgresUserStore(database.DB)
+	if err != nil {
+		logger.Error("failed to init user store", "err", err)
+		os.Exit(1)
+	}
+
+	eventsHandler := handlers.NewEventsHandler(eventStore)
+	usersHandler := handlers.NewUsersHandler(userStore)
+	authHandler := handlers.NewAuthHandler(userStore)
 
 	mux := http.NewServeMux()
 	eventsHandler.Register(mux)
+	usersHandler.Register(mux)
+	authHandler.Register(mux)
 
 	// Health check
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

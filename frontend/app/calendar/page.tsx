@@ -1,17 +1,27 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Map as MapIcon, CalendarDays } from "lucide-react";
 import CategoryFilter from "@/components/CategoryFilter";
 import MapView from "@/components/MapView";
-import { MOCK_EVENTS, EVENTS_BY_DATE } from "@/lib/mock-data";
+import { getEvents } from "@/lib/api/events";
 import { Event } from "@/lib/types";
 
 const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 const CATEGORY_DOT_COLORS: Record<string, string> = {
@@ -32,6 +42,13 @@ export default function CalendarPage() {
   const [viewDate, setViewDate] = useState(new Date(2024, 9, 1)); // October 2024
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showMap, setShowMap] = useState(false);
+  const [allEvents, setAllEvents] = useState<Event[]>([]);
+
+  useEffect(() => {
+    getEvents()
+      .then((r) => setAllEvents(r.events))
+      .catch(console.error);
+  }, []);
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
@@ -50,8 +67,7 @@ export default function CalendarPage() {
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = toISODateStr(year, month, d);
-      const ids = EVENTS_BY_DATE[dateStr] ?? [];
-      let events = ids.map((id) => MOCK_EVENTS.find((e) => e.id === id)).filter(Boolean) as Event[];
+      let events = allEvents.filter((e) => e.date === dateStr);
       if (selectedCategory !== "All") {
         events = events.filter((e) => e.category === selectedCategory);
       }
@@ -59,7 +75,7 @@ export default function CalendarPage() {
     }
 
     return result;
-  }, [year, month, firstDay, daysInMonth, selectedCategory]);
+  }, [year, month, firstDay, daysInMonth, selectedCategory, allEvents]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -74,9 +90,7 @@ export default function CalendarPage() {
             key={label}
             href={href}
             className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              active
-                ? "border-primary text-primary"
-                : "border-transparent text-gray-500 hover:text-gray-800"
+              active ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-800"
             }`}
             style={active ? { borderColor: "#ec5b13", color: "#ec5b13" } : undefined}
           >
@@ -93,13 +107,19 @@ export default function CalendarPage() {
       {/* View toggle */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600">
+          <button
+            onClick={prevMonth}
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600"
+          >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <h2 className="text-lg font-bold text-gray-900 min-w-[160px] text-center">
             {MONTHS[month]} {year}
           </h2>
-          <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600">
+          <button
+            onClick={nextMonth}
+            className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600"
+          >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
@@ -155,11 +175,7 @@ export default function CalendarPage() {
                     <span className="text-sm font-medium text-gray-700 block mb-1.5">{day}</span>
                     <div className="space-y-1">
                       {events.slice(0, 2).map((event) => (
-                        <Link
-                          key={event.id}
-                          href={`/events/${event.id}`}
-                          className="block"
-                        >
+                        <Link key={event.id} href={`/events/${event.id}`} className="block">
                           <div
                             className="text-xs px-1.5 py-0.5 rounded text-white truncate font-medium hover:opacity-90 transition-opacity"
                             style={{ backgroundColor: CATEGORY_DOT_COLORS[event.category] ?? "#6b7280" }}
@@ -169,9 +185,7 @@ export default function CalendarPage() {
                         </Link>
                       ))}
                       {events.length > 2 && (
-                        <span className="text-xs text-gray-400 font-medium">
-                          +{events.length - 2} more
-                        </span>
+                        <span className="text-xs text-gray-400 font-medium">+{events.length - 2} more</span>
                       )}
                     </div>
                   </>

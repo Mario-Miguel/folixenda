@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Clock, MapPin, Calendar, ChevronLeft, Star, Share2, Bookmark } from "lucide-react";
-import { MOCK_EVENTS } from "@/lib/mock-data";
+import { getEvent, getEvents } from "@/lib/api/events";
 import EventCard from "@/components/EventCard";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -25,10 +25,16 @@ function formatDate(dateStr: string) {
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const event = MOCK_EVENTS.find((e) => e.id === id);
-  if (!event) notFound();
 
-  const related = MOCK_EVENTS.filter((e) => e.id !== event.id && e.category === event.category).slice(0, 3);
+  let event;
+  try {
+    event = await getEvent(id);
+  } catch {
+    notFound();
+  }
+
+  const { events: allEvents } = await getEvents({ category: event.category });
+  const related = allEvents.filter((e) => e.id !== event.id).slice(0, 3);
 
   const categoryColor = CATEGORY_COLORS[event.category] ?? "bg-gray-100 text-gray-600";
 

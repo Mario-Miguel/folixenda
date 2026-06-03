@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Bell, Ticket } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search, Bell, Ticket, ShieldAlert } from "lucide-react";
+import { getStoredUser } from "@/lib/auth";
+import type { User } from "@/lib/types";
 
 const NAV_LINKS = [
   { href: "/", label: "Discover" },
@@ -12,6 +15,11 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getStoredUser());
+  }, [pathname]);
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
@@ -50,6 +58,20 @@ export default function Navbar() {
 
         {/* Actions */}
         <div className="flex items-center gap-3">
+          {currentUser?.role === "admin" && (
+            <Link
+              href="/admin"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                pathname === "/admin"
+                  ? "bg-orange-50"
+                  : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+              }`}
+              style={pathname === "/admin" ? { color: "#ec5b13" } : undefined}
+            >
+              <ShieldAlert className="w-4 h-4" />
+              Admin
+            </Link>
+          )}
           <button className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
             <Search className="w-5 h-5" />
           </button>
@@ -58,7 +80,9 @@ export default function Navbar() {
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" style={{ backgroundColor: "#ec5b13" }} />
           </button>
           <div className="w-9 h-9 rounded-full overflow-hidden bg-orange-100 flex items-center justify-center shrink-0">
-            <span className="text-sm font-semibold" style={{ color: "#ec5b13" }}>M</span>
+            <span className="text-sm font-semibold" style={{ color: "#ec5b13" }}>
+              {currentUser?.name?.[0]?.toUpperCase() ?? "M"}
+            </span>
           </div>
         </div>
       </div>

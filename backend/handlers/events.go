@@ -5,24 +5,26 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/Mario-Miguel/folixenda/backend/models"
 	"github.com/Mario-Miguel/folixenda/backend/store"
 )
 
 type EventsHandler struct {
-	store *store.Store
+	store store.EventStore
 }
 
-func NewEventsHandler(s *store.Store) *EventsHandler {
+func NewEventsHandler(s store.EventStore) *EventsHandler {
 	return &EventsHandler{store: s}
 }
 
-// Register mounts all event routes onto mux.
 func (h *EventsHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/events", h.list)
 	mux.HandleFunc("GET /api/events/{id}", h.get)
 	mux.HandleFunc("POST /api/events", h.create)
+	mux.HandleFunc("PUT /api/events/{id}", h.update)
+	mux.HandleFunc("DELETE /api/events/{id}", h.delete)
 }
 
 type listResponse struct {
@@ -65,15 +67,50 @@ func (h *EventsHandler) create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if event.ID == "" || event.Title == "" {
-		writeError(w, http.StatusBadRequest, "id and title are required")
+	if event.Title == "" {
+		writeError(w, http.StatusBadRequest, "title is required")
 		return
+	}
+	if event.ID == "" {
+		event.ID = fmt.Sprintf("e%d", time.Now().UnixNano())
 	}
 	if err := h.store.Create(&event); err != nil {
 		writeError(w, http.StatusConflict, fmt.Sprintf("could not create event: %v", err))
 		return
 	}
 	writeJSON(w, http.StatusCreated, event)
+}
+
+func (h *EventsHandler) update(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var event models.Event
+	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	event.ID = id
+	if err := h.store.Update(&event); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "event not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to update event")
+		return
+	}
+	writeJSON(w, http.StatusOK, event)
+}
+
+func (h *EventsHandler) delete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := h.store.Delete(id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "event not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to delete event")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

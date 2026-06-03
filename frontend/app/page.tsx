@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import CalendarWidget from "@/components/CalendarWidget";
 import CategoryFilter from "@/components/CategoryFilter";
 import EventCard from "@/components/EventCard";
 import MapView from "@/components/MapView";
-import { MOCK_EVENTS, EVENTS_BY_DATE } from "@/lib/mock-data";
+import { getEvents } from "@/lib/api/events";
+import { Event } from "@/lib/types";
 import { CalendarDays, Map } from "lucide-react";
 
 function formatDate(date: Date) {
@@ -24,19 +25,22 @@ export default function HomePage() {
   const [selectedDate, setSelectedDate] = useState(new Date("2024-10-05T12:00:00"));
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showMap, setShowMap] = useState(false);
+  const [allEvents, setAllEvents] = useState<Event[]>([]);
 
-  const eventDates = useMemo(() => new Set(Object.keys(EVENTS_BY_DATE)), []);
+  useEffect(() => {
+    getEvents()
+      .then((r) => setAllEvents(r.events))
+      .catch(console.error);
+  }, []);
+
+  const eventDates = useMemo(() => new Set(allEvents.map((e) => e.date)), [allEvents]);
 
   const dayEvents = useMemo(() => {
     const dateStr = toISODateStr(selectedDate);
-    const ids = EVENTS_BY_DATE[dateStr] ?? [];
-    const events = ids
-      .map((id) => MOCK_EVENTS.find((e) => e.id === id))
-      .filter(Boolean) as typeof MOCK_EVENTS;
-
+    const events = allEvents.filter((e) => e.date === dateStr);
     if (selectedCategory === "All") return events;
     return events.filter((e) => e.category === selectedCategory);
-  }, [selectedDate, selectedCategory]);
+  }, [selectedDate, selectedCategory, allEvents]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -48,11 +52,7 @@ export default function HomePage() {
       <div className="flex gap-8">
         {/* Left column: calendar + map toggle */}
         <aside className="hidden lg:flex flex-col gap-4 w-72 shrink-0">
-          <CalendarWidget
-            selectedDate={selectedDate}
-            onSelect={setSelectedDate}
-            eventDates={eventDates}
-          />
+          <CalendarWidget selectedDate={selectedDate} onSelect={setSelectedDate} eventDates={eventDates} />
 
           {/* Map / Calendar toggle */}
           <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-white">

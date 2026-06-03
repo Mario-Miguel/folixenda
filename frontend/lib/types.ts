@@ -1,11 +1,4 @@
-export type EventCategory =
-  | "Music"
-  | "Theater"
-  | "Parties"
-  | "Sports"
-  | "Food"
-  | "Art"
-  | "Wellness";
+export type EventCategory = "Music" | "Theater" | "Parties" | "Sports" | "Food" | "Art" | "Wellness";
 
 export interface Event {
   id: string;
@@ -27,4 +20,16 @@ export interface Event {
 export interface ApiEventsResponse {
   events: Event[];
   total: number;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  role: "admin" | "consumer" | "publisher";
+  subscriptionType?: string;
+  paymentMethod?: string;
+  location?: number[];
+  eventPreferences?: string[];
 }
