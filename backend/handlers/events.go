@@ -5,7 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/Mario-Miguel/folixenda/backend/models"
 	"github.com/Mario-Miguel/folixenda/backend/store"
@@ -72,7 +73,7 @@ func (h *EventsHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if event.ID == "" {
-		event.ID = fmt.Sprintf("e%d", time.Now().UnixNano())
+		event.ID = uuid.New().String()
 	}
 	if err := h.store.Create(&event); err != nil {
 		writeError(w, http.StatusConflict, fmt.Sprintf("could not create event: %v", err))

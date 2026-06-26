@@ -141,14 +141,26 @@ func (s *PostgresEventStore) Delete(id string) error {
 func scanEvent(s scanner) (*models.Event, error) {
 	e := &models.Event{}
 	var perks pq.StringArray
-	var dateVal, startTS, endTS time.Time
-	if err := s.Scan(&e.ID, &e.Title, &e.Description, &e.Category, &dateVal, &startTS, &endTS,
-		&e.Venue, &e.Address, &e.Price, &e.ImageURL, &e.ArtistName, &perks, &e.IsSaved); err != nil {
+	var dateVal, startTS, endTS sql.NullTime
+	var description, venue, address, imageURL, artistName sql.NullString
+	if err := s.Scan(&e.ID, &e.Title, &description, &e.Category, &dateVal, &startTS, &endTS,
+		&venue, &address, &e.Price, &imageURL, &artistName, &perks, &e.IsSaved); err != nil {
 		return nil, err
 	}
-	e.Date = dateVal.Format("2006-01-02")
-	e.StartTime = startTS.Format("15:04")
-	e.EndTime = endTS.Format("15:04")
+	e.Description = description.String
+	e.Venue = venue.String
+	e.Address = address.String
+	e.ImageURL = imageURL.String
+	e.ArtistName = artistName.String
+	if dateVal.Valid {
+		e.Date = dateVal.Time.Format("2006-01-02")
+	}
+	if startTS.Valid {
+		e.StartTime = startTS.Time.Format("15:04")
+	}
+	if endTS.Valid {
+		e.EndTime = endTS.Time.Format("15:04")
+	}
 	e.Perks = []string(perks)
 	return e, nil
 }

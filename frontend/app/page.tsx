@@ -22,7 +22,7 @@ function toISODateStr(d: Date) {
 }
 
 export default function HomePage() {
-  const [selectedDate, setSelectedDate] = useState(new Date("2024-10-05T12:00:00"));
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showMap, setShowMap] = useState(false);
   const [allEvents, setAllEvents] = useState<Event[]>([]);

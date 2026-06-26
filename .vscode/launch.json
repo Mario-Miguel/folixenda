@@ -1,0 +1,32 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run scraper",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scraper/src/scraper/${input:scraper}.py",
+      "cwd": "${workspaceFolder}/scraper",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/scraper"
+      }
+    },
+    {
+      "name": "Debug Backend",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/backend"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "scraper",
+      "type": "pickString",
+      "description": "Select scraper to run",
+      "options": ["feteas"]
+    }
+  ]
+}
