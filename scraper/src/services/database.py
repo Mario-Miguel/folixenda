@@ -127,14 +127,13 @@ async def import_events(events: list[dict], chunk_size: int = 2000):
     # perks is passed as text[] of array literals and cast back to text[] per row in the SELECT.
     # This avoids psycopg3 failing to infer the element type of empty list[list[str]] parameters.
     query = """
-    INSERT INTO events (id, title, description, category, date, start_time, end_time, price, venue, address, image_url, artist_name, perks)
-    SELECT id, title, description, category, date, start_time, end_time, price, venue, address, image_url, artist_name, perks::text[]
+    INSERT INTO events (id, title, description, category, start_time, end_time, price, venue, address, image_url, artist_name, perks)
+    SELECT id, title, description, category, start_time, end_time, price, venue, address, image_url, artist_name, perks::text[]
     FROM unnest(
         %(id)s::text[],
         %(title)s::text[],
         %(description)s::text[],
         %(category)s::text[],
-        %(date)s::date[],
         %(start_time)s::timestamp[],
         %(end_time)s::timestamp[],
         %(price)s::double precision[],
@@ -143,7 +142,7 @@ async def import_events(events: list[dict], chunk_size: int = 2000):
         %(image_url)s::text[],
         %(artist_name)s::text[],
         %(perks)s::text[]
-    ) AS t(id, title, description, category, date, start_time, end_time, price, venue, address, image_url, artist_name, perks)
+    ) AS t(id, title, description, category, start_time, end_time, price, venue, address, image_url, artist_name, perks)
     ON CONFLICT (id) DO NOTHING
     """
 
@@ -156,7 +155,6 @@ async def import_events(events: list[dict], chunk_size: int = 2000):
         title_arr: list[str] = []
         description_arr: list[str] = []
         category_arr: list[str] = []
-        date_arr: list[datetime.date] = []
         start_time_arr: list[datetime.datetime] = []
         end_time_arr: list[datetime.datetime] = []
         price_arr: list[float] = []
@@ -168,16 +166,16 @@ async def import_events(events: list[dict], chunk_size: int = 2000):
 
         for r in chunk:
             date_val = datetime.date.fromisoformat(r["date"])
+            midnight = datetime.time(0, 0)
             id_arr.append(str(uuid4()))
             title_arr.append(r["title"])
             description_arr.append(r.get("description"))
             category_arr.append(r.get("category"))
-            date_arr.append(date_val)
             start_time_arr.append(
-                datetime.datetime.combine(date_val, datetime.time.fromisoformat(r["start_time"])) if r.get("start_time") else None
+                datetime.datetime.combine(date_val, datetime.time.fromisoformat(r["start_time"]) if r.get("start_time") else midnight)
             )
             end_time_arr.append(
-                datetime.datetime.combine(date_val, datetime.time.fromisoformat(r["end_time"]))if r.get("end_time") else None
+                datetime.datetime.combine(date_val, datetime.time.fromisoformat(r["end_time"]) if r.get("end_time") else midnight)
             )
             price_arr.append(float(r.get("price", 0)))
             venue_arr.append(r.get("venue"))
@@ -191,7 +189,6 @@ async def import_events(events: list[dict], chunk_size: int = 2000):
             "title": title_arr,
             "description": description_arr,
             "category": category_arr,
-            "date": date_arr,
             "start_time": start_time_arr,
             "end_time": end_time_arr,
             "price": price_arr,

@@ -28,7 +28,6 @@ func (s *PostgresEventStore) migrate() error {
 			title       TEXT NOT NULL,
 			description TEXT,
 			category    TEXT NOT NULL,
-			date        date,
 			start_time  timestamp,
 			end_time    timestamp,
 			venue       TEXT,
@@ -40,15 +39,33 @@ func (s *PostgresEventStore) migrate() error {
 			is_saved    BOOLEAN NOT NULL DEFAULT FALSE
 		)
 	`)
+	if err != nil {
+		return err
+	}
+	// Drop legacy date column, backfilling NULLs first if it still exists.
+	_, err = s.db.Exec(`
+		DO $$ BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_name='events' AND column_name='date'
+			) THEN
+				UPDATE events
+				SET
+					start_time = COALESCE(start_time, date::timestamp),
+					end_time   = COALESCE(end_time,   date::timestamp);
+				ALTER TABLE events DROP COLUMN date;
+			END IF;
+		END $$;
+	`)
 	return err
 }
 
 func (s *PostgresEventStore) List(date, category string) ([]*models.Event, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, description, category, date, start_time, end_time, venue, address,
+		SELECT id, title, description, category, start_time, end_time, venue, address,
 		       price, image_url, artist_name, perks, is_saved
 		FROM events
-		WHERE ($1='' OR date::text=$1) AND ($2='' OR category=$2)
+		WHERE ($1='' OR start_time::date::text=$1) AND ($2='' OR category=$2)
 	`, date, category)
 	if err != nil {
 		return nil, err
@@ -67,7 +84,7 @@ func (s *PostgresEventStore) List(date, category string) ([]*models.Event, error
 
 func (s *PostgresEventStore) Get(id string) (*models.Event, error) {
 	row := s.db.QueryRow(`
-		SELECT id, title, description, category, date, start_time, end_time, venue, address,
+		SELECT id, title, description, category, start_time, end_time, venue, address,
 		       price, image_url, artist_name, perks, is_saved
 		FROM events WHERE id=$1
 	`, id)
@@ -78,11 +95,7 @@ func (s *PostgresEventStore) Get(id string) (*models.Event, error) {
 	return e, err
 }
 
-func eventTimestamps(e *models.Event) (dateVal time.Time, startTS time.Time, endTS time.Time, err error) {
-	dateVal, err = time.Parse("2006-01-02", e.Date)
-	if err != nil {
-		return
-	}
+func eventTimestamps(e *models.Event) (startTS time.Time, endTS time.Time, err error) {
 	startTS, err = time.Parse("2006-01-02 15:04", e.Date+" "+e.StartTime)
 	if err != nil {
 		return
@@ -92,29 +105,29 @@ func eventTimestamps(e *models.Event) (dateVal time.Time, startTS time.Time, end
 }
 
 func (s *PostgresEventStore) Create(e *models.Event) error {
-	dateVal, startTS, endTS, err := eventTimestamps(e)
+	startTS, endTS, err := eventTimestamps(e)
 	if err != nil {
 		return err
 	}
 	_, err = s.db.Exec(`
-		INSERT INTO events (id, title, description, category, date, start_time, end_time, venue, address,
+		INSERT INTO events (id, title, description, category, start_time, end_time, venue, address,
 		                    price, image_url, artist_name, perks, is_saved)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-	`, e.ID, e.Title, e.Description, e.Category, dateVal, startTS, endTS, e.Venue, e.Address,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+	`, e.ID, e.Title, e.Description, e.Category, startTS, endTS, e.Venue, e.Address,
 		e.Price, e.ImageURL, e.ArtistName, pq.Array(e.Perks), e.IsSaved)
 	return err
 }
 
 func (s *PostgresEventStore) Update(e *models.Event) error {
-	dateVal, startTS, endTS, err := eventTimestamps(e)
+	startTS, endTS, err := eventTimestamps(e)
 	if err != nil {
 		return err
 	}
 	result, err := s.db.Exec(`
-		UPDATE events SET title=$2, description=$3, category=$4, date=$5, start_time=$6, end_time=$7,
-		venue=$8, address=$9, price=$10, image_url=$11, artist_name=$12, perks=$13, is_saved=$14
+		UPDATE events SET title=$2, description=$3, category=$4, start_time=$5, end_time=$6,
+		venue=$7, address=$8, price=$9, image_url=$10, artist_name=$11, perks=$12, is_saved=$13
 		WHERE id=$1
-	`, e.ID, e.Title, e.Description, e.Category, dateVal, startTS, endTS, e.Venue, e.Address,
+	`, e.ID, e.Title, e.Description, e.Category, startTS, endTS, e.Venue, e.Address,
 		e.Price, e.ImageURL, e.ArtistName, pq.Array(e.Perks), e.IsSaved)
 	if err != nil {
 		return err
@@ -141,9 +154,9 @@ func (s *PostgresEventStore) Delete(id string) error {
 func scanEvent(s scanner) (*models.Event, error) {
 	e := &models.Event{}
 	var perks pq.StringArray
-	var dateVal, startTS, endTS sql.NullTime
+	var startTS, endTS sql.NullTime
 	var description, venue, address, imageURL, artistName sql.NullString
-	if err := s.Scan(&e.ID, &e.Title, &description, &e.Category, &dateVal, &startTS, &endTS,
+	if err := s.Scan(&e.ID, &e.Title, &description, &e.Category, &startTS, &endTS,
 		&venue, &address, &e.Price, &imageURL, &artistName, &perks, &e.IsSaved); err != nil {
 		return nil, err
 	}
@@ -152,10 +165,8 @@ func scanEvent(s scanner) (*models.Event, error) {
 	e.Address = address.String
 	e.ImageURL = imageURL.String
 	e.ArtistName = artistName.String
-	if dateVal.Valid {
-		e.Date = dateVal.Time.Format("2006-01-02")
-	}
 	if startTS.Valid {
+		e.Date = startTS.Time.Format("2006-01-02")
 		e.StartTime = startTS.Time.Format("15:04")
 	}
 	if endTS.Valid {

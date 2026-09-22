@@ -513,9 +513,8 @@ function EventModalForm({
     title: editing?.title ?? "",
     description: editing?.description ?? "",
     category: editing?.category ?? "Music",
-    date: editing?.date ?? "",
-    startTime: editing?.startTime ?? "",
-    endTime: editing?.endTime ?? "",
+    startDatetime: editing?.date && editing?.startTime ? `${editing.date}T${editing.startTime}` : "",
+    endDatetime: editing?.date && editing?.endTime ? `${editing.date}T${editing.endTime}` : "",
     venue: editing?.venue ?? "",
     address: editing?.address ?? "",
     price: String(editing?.price ?? 0),
@@ -530,13 +529,15 @@ function EventModalForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
+    const [startDate, startTime] = form.startDatetime.split("T");
+    const [, endTime] = form.endDatetime.split("T");
     const payload: Partial<Event> = {
       title: form.title,
       description: form.description,
       category: form.category as EventCategory,
-      date: form.date,
-      startTime: form.startTime,
-      endTime: form.endTime,
+      date: startDate,
+      startTime,
+      endTime,
       venue: form.venue,
       address: form.address,
       price: parseFloat(form.price) || 0,
@@ -560,42 +561,31 @@ function EventModalForm({
             onChange={(e) => set("description", e.target.value)}
           />
         </Field>
+        <Field label="Category">
+          <select className={inputCls} value={form.category} onChange={(e) => set("category", e.target.value)}>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Category">
-            <select className={inputCls} value={form.category} onChange={(e) => set("category", e.target.value)}>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Date">
+          <Field label="Start">
             <input
-              type="date"
+              type="datetime-local"
               className={inputCls}
-              value={form.date}
-              onChange={(e) => set("date", e.target.value)}
+              value={form.startDatetime}
+              onChange={(e) => set("startDatetime", e.target.value)}
               required
             />
           </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Start time">
+          <Field label="End">
             <input
-              type="time"
+              type="datetime-local"
               className={inputCls}
-              value={form.startTime}
-              onChange={(e) => set("startTime", e.target.value)}
-              required
-            />
-          </Field>
-          <Field label="End time">
-            <input
-              type="time"
-              className={inputCls}
-              value={form.endTime}
-              onChange={(e) => set("endTime", e.target.value)}
+              value={form.endDatetime}
+              onChange={(e) => set("endDatetime", e.target.value)}
               required
             />
           </Field>

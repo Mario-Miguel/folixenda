@@ -20,9 +20,9 @@ _DEFAULT_HEADERS = {
 }
 
 
-async def request(method: HTTPMethod, url: str, headers: dict | None = None)-> tuple[int, bytes]:
+async def request(method: HTTPMethod, url: str, headers: dict | None = None, body: dict | str | None = None)-> tuple[int, bytes]:
     merged_headers = {**_DEFAULT_HEADERS, **(headers or {})}
     async with aiohttp.ClientSession() as session:
-        async with session.request(method=method.value, url=url, headers=merged_headers) as response:
+        async with session.request(method=method.value, url=url, headers=merged_headers, data=body) as response:
             status = response.status
             return status, await response.read()

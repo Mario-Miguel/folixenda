@@ -5,7 +5,7 @@ export interface Event {
   title: string;
   description: string;
   category: EventCategory;
-  date: string; // ISO date string
+  date: string; // YYYY-MM-DD, derived from startTime by the API
   startTime: string; // "HH:MM"
   endTime: string; // "HH:MM"
   venue: string;
