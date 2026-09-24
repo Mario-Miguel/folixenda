@@ -32,6 +32,6 @@ go.work.sum
 .vscode/
 
 db_queries/
-# backend/tmp/
+backend/tmp/
 
 .env
