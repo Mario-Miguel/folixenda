@@ -4,12 +4,12 @@ package models
 type EventCategory string
 
 const (
-	CategoryMusic   EventCategory = "Music"
-	CategoryTheater EventCategory = "Theater"
-	CategoryParties EventCategory = "Parties"
-	CategorySports  EventCategory = "Sports"
-	CategoryFood    EventCategory = "Food"
-	CategoryArt     EventCategory = "Art"
+	CategoryMusic    EventCategory = "Music"
+	CategoryTheater  EventCategory = "Theater"
+	CategoryParties  EventCategory = "Parties"
+	CategorySports   EventCategory = "Sports"
+	CategoryFood     EventCategory = "Food"
+	CategoryArt      EventCategory = "Art"
 	CategoryWellness EventCategory = "Wellness"
 )
 
@@ -29,4 +29,6 @@ type Event struct {
 	ArtistName  string        `json:"artistName,omitempty"`
 	Perks       []string      `json:"perks,omitempty"`
 	IsSaved     bool          `json:"isSaved"`
+	Lat         *float64      `json:"lat,omitempty"` // nil when the event has no coordinates
+	Lon         *float64      `json:"lon,omitempty"`
 }

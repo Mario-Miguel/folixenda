@@ -37,10 +37,10 @@ export default function MapView({
   // using LEGEND_ITEMS for the category color
   const markers: MapMarker[] = events.map((e) => ({
     id: e.id,
-    lat: 43.3614,
-    lon: -5.8494,
+    lat: e.lat || 43.3614,
+    lon: e.lon || -5.8494,
+    precise: e.lat != null && e.lon != null,
     title: e.title,
-    subtitle: e.description,
     color: "#14b8a6",
   }));
 

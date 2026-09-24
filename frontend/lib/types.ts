@@ -15,6 +15,8 @@ export interface Event {
   artistName?: string;
   perks?: string[];
   isSaved?: boolean;
+  lat?: number;
+  lon?: number;
 }
 
 export interface ApiEventsResponse {

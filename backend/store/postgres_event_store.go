@@ -36,7 +36,9 @@ func (s *PostgresEventStore) migrate() error {
 			image_url   TEXT,
 			artist_name TEXT,
 			perks       TEXT[],
-			is_saved    BOOLEAN NOT NULL DEFAULT FALSE
+			is_saved    BOOLEAN NOT NULL DEFAULT FALSE,
+			lat 		DOUBLE PRECISION,
+			lon 		DOUBLE PRECISION
 		)
 	`)
 	if err != nil {
@@ -62,8 +64,21 @@ func (s *PostgresEventStore) migrate() error {
 
 func (s *PostgresEventStore) List(date, category string) ([]*models.Event, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, description, category, start_time, end_time, venue, address,
-		       price, image_url, artist_name, perks, is_saved
+		SELECT id, 
+			   title,
+			   description, 
+			   category, 
+			   start_time, 
+			   end_time, 
+			   price,
+			   venue, 
+			   address,
+		       image_url, 
+			   artist_name, 
+			   perks, 
+			   is_saved,
+			   lat,
+			   lon
 		FROM events
 		WHERE ($1='' OR start_time::date::text=$1) AND ($2='' OR category=$2)
 	`, date, category)
@@ -84,8 +99,8 @@ func (s *PostgresEventStore) List(date, category string) ([]*models.Event, error
 
 func (s *PostgresEventStore) Get(id string) (*models.Event, error) {
 	row := s.db.QueryRow(`
-		SELECT id, title, description, category, start_time, end_time, venue, address,
-		       price, image_url, artist_name, perks, is_saved
+		SELECT id, title, description, category, start_time, end_time, price, venue, address,
+		       image_url, artist_name, perks, is_saved, lat, lon
 		FROM events WHERE id=$1
 	`, id)
 	e, err := scanEvent(row)
@@ -111,10 +126,10 @@ func (s *PostgresEventStore) Create(e *models.Event) error {
 	}
 	_, err = s.db.Exec(`
 		INSERT INTO events (id, title, description, category, start_time, end_time, venue, address,
-		                    price, image_url, artist_name, perks, is_saved)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		                    price, image_url, artist_name, perks, is_saved, lat, lon)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
 	`, e.ID, e.Title, e.Description, e.Category, startTS, endTS, e.Venue, e.Address,
-		e.Price, e.ImageURL, e.ArtistName, pq.Array(e.Perks), e.IsSaved)
+		e.Price, e.ImageURL, e.ArtistName, pq.Array(e.Perks), e.IsSaved, e.Lat, e.Lon)
 	return err
 }
 
@@ -125,10 +140,11 @@ func (s *PostgresEventStore) Update(e *models.Event) error {
 	}
 	result, err := s.db.Exec(`
 		UPDATE events SET title=$2, description=$3, category=$4, start_time=$5, end_time=$6,
-		venue=$7, address=$8, price=$9, image_url=$10, artist_name=$11, perks=$12, is_saved=$13
+		venue=$7, address=$8, price=$9, image_url=$10, artist_name=$11, perks=$12, is_saved=$13,
+		lat=$14, lon=$15
 		WHERE id=$1
 	`, e.ID, e.Title, e.Description, e.Category, startTS, endTS, e.Venue, e.Address,
-		e.Price, e.ImageURL, e.ArtistName, pq.Array(e.Perks), e.IsSaved)
+		e.Price, e.ImageURL, e.ArtistName, pq.Array(e.Perks), e.IsSaved, e.Lat, e.Lon)
 	if err != nil {
 		return err
 	}
@@ -156,8 +172,9 @@ func scanEvent(s scanner) (*models.Event, error) {
 	var perks pq.StringArray
 	var startTS, endTS sql.NullTime
 	var description, venue, address, imageURL, artistName sql.NullString
+	var lat, lon sql.NullFloat64
 	if err := s.Scan(&e.ID, &e.Title, &description, &e.Category, &startTS, &endTS,
-		&venue, &address, &e.Price, &imageURL, &artistName, &perks, &e.IsSaved); err != nil {
+		&e.Price, &venue, &address, &imageURL, &artistName, &perks, &e.IsSaved, &lat, &lon); err != nil {
 		return nil, err
 	}
 	e.Description = description.String
@@ -173,5 +190,9 @@ func scanEvent(s scanner) (*models.Event, error) {
 		e.EndTime = endTS.Time.Format("15:04")
 	}
 	e.Perks = []string(perks)
+	if lat.Valid && lon.Valid {
+		e.Lat = &lat.Float64
+		e.Lon = &lon.Float64
+	}
 	return e, nil
 }

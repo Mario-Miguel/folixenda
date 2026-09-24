@@ -1,21 +1,51 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
+import L from "leaflet";
 import { useEffect } from "react";
-import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { Circle, MapContainer, Marker, TileLayer, Tooltip, useMap } from "react-leaflet";
 
 // Leaflet touches `window` on import: load this component with next/dynamic and `ssr: false`.
 
 const OVIEDO: [number, number] = [43.3614, -5.8494];
 const DEFAULT_ZOOM = 13;
-const SELECTED_ZOOM = 15;
+const SELECTED_ZOOM = 13;
+const SELECTED_COLOR = "#ec5b13";
+const DEFAULT_COLOR = "#6b7280";
+// Radius (meters) of the area drawn for events without a precise location
+const IMPRECISE_RADIUS_M = 400;
+
+// Icons are cached so react-leaflet doesn't call setIcon on every render
+const pinIcons = new Map<string, L.DivIcon>();
+
+function pinIcon(color: string, selected: boolean): L.DivIcon {
+  const key = `${color}-${selected}`;
+  let icon = pinIcons.get(key);
+  if (!icon) {
+    const [w, h] = selected ? [34, 46] : [26, 36];
+    icon = L.divIcon({
+      className: "", // drop Leaflet's default white box
+      html: `<svg width="${w}" height="${h}" viewBox="0 0 26 36" xmlns="http://www.w3.org/2000/svg">
+        <path d="M13 0C5.8 0 0 5.8 0 13c0 9.4 13 23 13 23s13-13.6 13-23C26 5.8 20.2 0 13 0z"
+              fill="${color}" stroke="#ffffff" stroke-width="2"/>
+        <circle cx="13" cy="13" r="4.5" fill="#ffffff"/>
+      </svg>`,
+      iconSize: [w, h],
+      iconAnchor: [w / 2, h], // tip of the pin sits on the coordinate
+      tooltipAnchor: [0, -h],
+    });
+    pinIcons.set(key, icon);
+  }
+  return icon;
+}
 
 export interface MapMarker {
   id: string;
   lat: number;
   lon: number;
+  // false when lat/lon is an approximation: drawn as an area circle instead of a pin
+  precise: boolean;
   title: string;
-  subtitle?: string;
   color?: string;
 }
 
@@ -47,21 +77,45 @@ export default function EventsMap({ markers = [], selectedId = null, onSelect }:
 
       {markers.map((m) => {
         const isSelected = m.id === selectedId;
-        const color = isSelected ? "#ec5b13" : (m.color ?? "#6b7280");
+        const color = isSelected ? SELECTED_COLOR : (m.color ?? DEFAULT_COLOR);
+        const handlers = { click: () => onSelect?.(isSelected ? null : m.id) };
+        const tooltip = (
+          <Tooltip direction="top" permanent={isSelected}>
+            <span className="font-semibold">{m.title}</span>
+            {!m.precise && <span className="block text-gray-500">Approximate location</span>}
+          </Tooltip>
+        );
+
+        if (m.precise) {
+          return (
+            <Marker
+              key={m.id}
+              position={[m.lat, m.lon]}
+              icon={pinIcon(color, isSelected)}
+              zIndexOffset={isSelected ? 1000 : 0}
+              eventHandlers={handlers}
+            >
+              {tooltip}
+            </Marker>
+          );
+        }
 
         return (
-          <CircleMarker
+          <Circle
             key={m.id}
             center={[m.lat, m.lon]}
-            radius={isSelected ? 11 : 7}
-            pathOptions={{ color: "#ffffff", weight: 2, fillColor: color, fillOpacity: 1 }}
-            eventHandlers={{ click: () => onSelect?.(isSelected ? null : m.id) }}
+            radius={IMPRECISE_RADIUS_M}
+            pathOptions={{
+              color,
+              weight: isSelected ? 3 : 1.5,
+              dashArray: "6 4",
+              fillColor: color,
+              fillOpacity: isSelected ? 0.3 : 0.15,
+            }}
+            eventHandlers={handlers}
           >
-            <Tooltip direction="top" offset={[0, -8]} permanent={isSelected}>
-              <span className="font-semibold">{m.title}</span>
-              {m.subtitle && <span className="block text-gray-500">{m.subtitle}</span>}
-            </Tooltip>
-          </CircleMarker>
+            {tooltip}
+          </Circle>
         );
       })}
 
