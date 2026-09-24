@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MapPin, Clock, Bookmark, BookmarkCheck, Plus } from "lucide-react";
 import { Event } from "@/lib/types";
 
-const CATEGORY_COLORS: Record<string, string> = {
+export const CATEGORY_COLORS: Record<string, string> = {
   Music: "bg-purple-100 text-purple-700",
   Theater: "bg-blue-100 text-blue-700",
   Parties: "bg-pink-100 text-pink-700",

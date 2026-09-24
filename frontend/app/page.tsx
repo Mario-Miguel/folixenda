@@ -7,7 +7,9 @@ import EventCard from "@/components/EventCard";
 import MapView from "@/components/MapView";
 import { getEvents } from "@/lib/api/events";
 import { Event } from "@/lib/types";
-import { CalendarDays, Map } from "lucide-react";
+import { CalendarDays } from "lucide-react";
+import SwitchMapWidget from "@/components/SwitchMapWidget";
+import CompactEventList from "@/components/CompactEventList";
 
 function formatDate(date: Date) {
   return date.toLocaleDateString("en-US", {
@@ -26,6 +28,7 @@ export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showMap, setShowMap] = useState(false);
   const [allEvents, setAllEvents] = useState<Event[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   useEffect(() => {
     getEvents()
@@ -55,30 +58,10 @@ export default function HomePage() {
           <CalendarWidget selectedDate={selectedDate} onSelect={setSelectedDate} eventDates={eventDates} />
 
           {/* Map / Calendar toggle */}
-          <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-white">
-            <button
-              onClick={() => setShowMap(false)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
-                !showMap ? "text-white" : "text-gray-600 hover:bg-gray-50"
-              }`}
-              style={!showMap ? { backgroundColor: "#ec5b13" } : undefined}
-            >
-              <CalendarDays className="w-4 h-4" />
-              Calendar
-            </button>
-            <button
-              onClick={() => setShowMap(true)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${
-                showMap ? "text-white" : "text-gray-600 hover:bg-gray-50"
-              }`}
-              style={showMap ? { backgroundColor: "#ec5b13" } : undefined}
-            >
-              <Map className="w-4 h-4" />
-              Map
-            </button>
-          </div>
-
-          {showMap && <MapView />}
+          <SwitchMapWidget setShowMap={setShowMap} showMap={showMap} />
+          {showMap && (
+            <CompactEventList events={dayEvents} selectedEventId={selectedEventId} onSelect={setSelectedEventId} />
+          )}
         </aside>
 
         {/* Right column: event list */}
@@ -92,14 +75,26 @@ export default function HomePage() {
             </div>
           </div>
 
+          {/* Desktop map view replaces the main event list */}
+          {showMap && (
+            <div className="hidden lg:block">
+              <MapView
+                events={dayEvents}
+                selectedEventId={selectedEventId}
+                onSelectEvent={setSelectedEventId}
+                className="h-[32rem]"
+              />
+            </div>
+          )}
+
           {dayEvents.length === 0 ? (
-            <div className="text-center py-20 text-gray-400">
+            <div className={`text-center py-20 text-gray-400 ${showMap ? "lg:hidden" : ""}`}>
               <CalendarDays className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium">No events on this day</p>
               <p className="text-sm mt-1">Try selecting a different date or category</p>
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className={`flex flex-col gap-3 ${showMap ? "lg:hidden" : ""}`}>
               {dayEvents.map((event) => (
                 <EventCard key={event.id} event={event} compact />
               ))}
