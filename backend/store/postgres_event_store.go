@@ -3,25 +3,32 @@ package store
 import (
 	"database/sql"
 	"errors"
-	"time"
 
 	"github.com/Mario-Miguel/folixenda/backend/models"
 	"github.com/lib/pq"
 )
 
-type PostgresEventStore struct {
+type EventStore interface {
+	List(date, category string) ([]*models.Event, error)
+	Get(id string) (*models.Event, error)
+	Create(e *models.Event) error
+	Update(e *models.Event) error
+	Delete(id string) error
+}
+
+type EventStoreDBConnection struct {
 	db *sql.DB
 }
 
-func NewPostgresEventStore(db *sql.DB) (*PostgresEventStore, error) {
-	s := &PostgresEventStore{db: db}
+func NewEventStore(db *sql.DB) (*EventStoreDBConnection, error) {
+	s := &EventStoreDBConnection{db: db}
 	if err := s.migrate(); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-func (s *PostgresEventStore) migrate() error {
+func (s *EventStoreDBConnection) migrate() error {
 	_, err := s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS events (
 			id          TEXT PRIMARY KEY,
@@ -62,7 +69,7 @@ func (s *PostgresEventStore) migrate() error {
 	return err
 }
 
-func (s *PostgresEventStore) List(date, category string) ([]*models.Event, error) {
+func (s *EventStoreDBConnection) List(date, category string) ([]*models.Event, error) {
 	rows, err := s.db.Query(`
 		SELECT id, 
 			   title,
@@ -97,7 +104,7 @@ func (s *PostgresEventStore) List(date, category string) ([]*models.Event, error
 	return events, rows.Err()
 }
 
-func (s *PostgresEventStore) Get(id string) (*models.Event, error) {
+func (s *EventStoreDBConnection) Get(id string) (*models.Event, error) {
 	row := s.db.QueryRow(`
 		SELECT id, title, description, category, start_time, end_time, price, venue, address,
 		       image_url, artist_name, perks, is_saved, lat, lon
@@ -110,16 +117,7 @@ func (s *PostgresEventStore) Get(id string) (*models.Event, error) {
 	return e, err
 }
 
-func eventTimestamps(e *models.Event) (startTS time.Time, endTS time.Time, err error) {
-	startTS, err = time.Parse("2006-01-02 15:04", e.Date+" "+e.StartTime)
-	if err != nil {
-		return
-	}
-	endTS, err = time.Parse("2006-01-02 15:04", e.Date+" "+e.EndTime)
-	return
-}
-
-func (s *PostgresEventStore) Create(e *models.Event) error {
+func (s *EventStoreDBConnection) Create(e *models.Event) error {
 	startTS, endTS, err := eventTimestamps(e)
 	if err != nil {
 		return err
@@ -133,7 +131,7 @@ func (s *PostgresEventStore) Create(e *models.Event) error {
 	return err
 }
 
-func (s *PostgresEventStore) Update(e *models.Event) error {
+func (s *EventStoreDBConnection) Update(e *models.Event) error {
 	startTS, endTS, err := eventTimestamps(e)
 	if err != nil {
 		return err
@@ -155,7 +153,7 @@ func (s *PostgresEventStore) Update(e *models.Event) error {
 	return nil
 }
 
-func (s *PostgresEventStore) Delete(id string) error {
+func (s *EventStoreDBConnection) Delete(id string) error {
 	result, err := s.db.Exec(`DELETE FROM events WHERE id=$1`, id)
 	if err != nil {
 		return err

@@ -15,7 +15,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("user store: %v", err)
 	}
-	eventStore, err := store.NewPostgresEventStore(database.DB)
+	eventStore, err := store.NewEventStore(database.DB)
 	if err != nil {
 		log.Fatalf("event store: %v", err)
 	}

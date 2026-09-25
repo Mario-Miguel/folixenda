@@ -25,7 +25,7 @@ func main() {
 
 	database.Init(".env")
 
-	eventStore, err := store.NewPostgresEventStore(database.DB)
+	eventStore, err := store.NewEventStore(database.DB)
 	if err != nil {
 		logger.Error("failed to init event store", "err", err)
 		os.Exit(1)

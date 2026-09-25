@@ -9,19 +9,28 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type PostgresUserStore struct {
+type UserStore interface {
+	List() ([]*models.User, error)
+	Get(id string) (*models.User, error)
+	Create(u *models.User) error
+	Update(u *models.User) error
+	Delete(id string) error
+	Authenticate(username, password string) (*models.User, error)
+}
+
+type UserStoreDBConnection struct {
 	db *sql.DB
 }
 
-func NewPostgresUserStore(db *sql.DB) (*PostgresUserStore, error) {
-	s := &PostgresUserStore{db: db}
+func NewPostgresUserStore(db *sql.DB) (*UserStoreDBConnection, error) {
+	s := &UserStoreDBConnection{db: db}
 	if err := s.migrate(); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-func (s *PostgresUserStore) migrate() error {
+func (s *UserStoreDBConnection) migrate() error {
 	_, err := s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS users (
 			id                TEXT PRIMARY KEY,
@@ -39,7 +48,7 @@ func (s *PostgresUserStore) migrate() error {
 	return err
 }
 
-func (s *PostgresUserStore) List() ([]*models.User, error) {
+func (s *UserStoreDBConnection) List() ([]*models.User, error) {
 	rows, err := s.db.Query(`
 		SELECT id, username, email, name, role, subscription_type, payment_method, location, event_preferences
 		FROM users
@@ -59,7 +68,7 @@ func (s *PostgresUserStore) List() ([]*models.User, error) {
 	return users, rows.Err()
 }
 
-func (s *PostgresUserStore) Get(id string) (*models.User, error) {
+func (s *UserStoreDBConnection) Get(id string) (*models.User, error) {
 	row := s.db.QueryRow(`
 		SELECT id, username, email, name, role, subscription_type, payment_method, location, event_preferences
 		FROM users WHERE id=$1
@@ -71,7 +80,7 @@ func (s *PostgresUserStore) Get(id string) (*models.User, error) {
 	return u, err
 }
 
-func (s *PostgresUserStore) Create(u *models.User) error {
+func (s *UserStoreDBConnection) Create(u *models.User) error {
 	if u.Password != "" {
 		hashed, err := hashPassword(u.Password)
 		if err != nil {
@@ -87,7 +96,7 @@ func (s *PostgresUserStore) Create(u *models.User) error {
 	return err
 }
 
-func (s *PostgresUserStore) Update(u *models.User) error {
+func (s *UserStoreDBConnection) Update(u *models.User) error {
 	var err error
 	var result sql.Result
 	if u.Password != "" {
@@ -117,7 +126,7 @@ func (s *PostgresUserStore) Update(u *models.User) error {
 	return nil
 }
 
-func (s *PostgresUserStore) Delete(id string) error {
+func (s *UserStoreDBConnection) Delete(id string) error {
 	result, err := s.db.Exec(`DELETE FROM users WHERE id=$1`, id)
 	if err != nil {
 		return err
@@ -129,7 +138,7 @@ func (s *PostgresUserStore) Delete(id string) error {
 	return nil
 }
 
-func (s *PostgresUserStore) Authenticate(username, password string) (*models.User, error) {
+func (s *UserStoreDBConnection) Authenticate(username, password string) (*models.User, error) {
 	var hashed string
 	var location pq.Float64Array
 	var prefs pq.StringArray
@@ -150,10 +159,6 @@ func (s *PostgresUserStore) Authenticate(username, password string) (*models.Use
 	u.Location = []float64(location)
 	u.EventPreferences = []string(prefs)
 	return u, nil
-}
-
-type scanner interface {
-	Scan(dest ...any) error
 }
 
 func scanUser(s scanner) (*models.User, error) {
