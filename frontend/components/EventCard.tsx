@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { MapPin, Clock, Bookmark, BookmarkCheck, Plus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Event } from "@/lib/types";
 
 export const CATEGORY_COLORS: Record<string, string> = {
@@ -20,6 +21,7 @@ interface EventCardProps {
 }
 
 export default function EventCard({ event, compact = false }: EventCardProps) {
+  const { t } = useTranslation();
   const categoryColor = CATEGORY_COLORS[event.category] ?? "bg-gray-100 text-gray-600";
 
   if (compact) {
@@ -30,7 +32,7 @@ export default function EventCard({ event, compact = false }: EventCardProps) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${categoryColor}`}>
-                  {event.category}
+                  {t(`categories.${event.category}`)}
                 </span>
               </div>
               <h3 className="font-semibold text-gray-900 text-sm truncate group-hover:text-primary transition-colors"
@@ -48,7 +50,7 @@ export default function EventCard({ event, compact = false }: EventCardProps) {
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
               <span className="text-sm font-bold text-gray-900">
-                {event.price === 0 ? "Free" : `$${event.price}`}
+                {event.price === 0 ? t("common.free") : t("common.price", { price: event.price })}
               </span>
               <button className="w-7 h-7 flex items-center justify-center rounded-full bg-orange-50 text-primary hover:bg-orange-100 transition-colors"
                       style={{ color: "#ec5b13" }}>
@@ -83,7 +85,7 @@ export default function EventCard({ event, compact = false }: EventCardProps) {
           </div>
           <div className="absolute bottom-3 left-3">
             <span className={`text-xs font-medium px-2.5 py-1 rounded-full bg-white/90 ${categoryColor}`}>
-              {event.category}
+              {t(`categories.${event.category}`)}
             </span>
           </div>
         </div>
@@ -106,11 +108,11 @@ export default function EventCard({ event, compact = false }: EventCardProps) {
 
           <div className="flex items-center justify-between mt-4">
             <span className="font-bold text-gray-900">
-              {event.price === 0 ? "Free" : `From $${event.price}`}
+              {event.price === 0 ? t("common.free") : t("common.fromPrice", { price: event.price })}
             </span>
             <span className="text-xs px-2.5 py-1 rounded-full text-white font-medium"
                   style={{ backgroundColor: "#ec5b13" }}>
-              Get tickets
+              {t("common.getTickets")}
             </span>
           </div>
         </div>

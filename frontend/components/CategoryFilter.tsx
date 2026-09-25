@@ -1,6 +1,7 @@
 "use client";
 
 import { Music, Drama, PartyPopper, Dumbbell, UtensilsCrossed, Palette, HeartPulse } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { EventCategory } from "@/lib/types";
 
 const CATEGORIES: { label: EventCategory | "All"; icon: React.ReactNode }[] = [
@@ -20,6 +21,8 @@ interface CategoryFilterProps {
 }
 
 export default function CategoryFilter({ selected, onChange }: CategoryFilterProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
       {CATEGORIES.map(({ label, icon }) => {
@@ -36,7 +39,7 @@ export default function CategoryFilter({ selected, onChange }: CategoryFilterPro
             style={isActive ? { backgroundColor: "#ec5b13", borderColor: "#ec5b13" } : undefined}
           >
             {icon}
-            {label}
+            {t(`categories.${label}`)}
           </button>
         );
       })}

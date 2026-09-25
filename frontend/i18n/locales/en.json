@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "title": "folixenda – Discover Local Events",
+    "description": "Find and explore music, theater, art, food, and more events near you."
+  },
+  "common": {
+    "free": "Free",
+    "price": "${{price}}",
+    "fromPrice": "From ${{price}}",
+    "getTickets": "Get tickets",
+    "loading": "Loading…",
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "edit": "Edit",
+    "delete": "Delete",
+    "calendar": "Calendar",
+    "map": "Map",
+    "eventList": "Event list",
+    "eventCount_one": "{{count}} event",
+    "eventCount_other": "{{count}} events",
+    "eventsFound_one": "{{count}} event found",
+    "eventsFound_other": "{{count}} events found",
+    "noEventsOnDay": "No events on this day",
+    "tryDifferentFilter": "Try selecting a different date or category",
+    "eventTypes": "Event types",
+    "eventsMap": "Events Map",
+    "approximateLocation": "Approximate location",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "moreCount": "+{{count}} more"
+  },
+  "categories": {
+    "All": "All",
+    "Music": "Music",
+    "Theater": "Theater",
+    "Parties": "Parties",
+    "Sports": "Sports",
+    "Food": "Food",
+    "Art": "Art",
+    "Wellness": "Wellness"
+  },
+  "nav": {
+    "discover": "Discover",
+    "myEvents": "My Events",
+    "myTickets": "My Tickets",
+    "community": "Community",
+    "admin": "Admin",
+    "search": "Search",
+    "notifications": "Notifications",
+    "language": "Language"
+  },
+  "event": {
+    "backToEvents": "Back to events",
+    "share": "Share",
+    "by": "by",
+    "date": "Date",
+    "time": "Time",
+    "venue": "Venue",
+    "whatsIncluded": "What's included",
+    "price": "Price",
+    "perPerson": "per person",
+    "sellingFast": "🔥 Selling Fast",
+    "registerFree": "Register for free",
+    "saveForLater": "Save for later",
+    "moreCategoryEvents": "More {{category}} events"
+  },
+  "admin": {
+    "access": "Admin access",
+    "noAdminAccess": "This account does not have admin access.",
+    "wrongCredentials": "Wrong username or password.",
+    "genericError": "Something went wrong. Please try again.",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "dashboard": "Admin Dashboard",
+    "loggedInAs": "Logged in as {{name}}",
+    "logOut": "Log out",
+    "tabs": {
+      "users": "Users",
+      "events": "Events"
+    },
+    "fields": {
+      "name": "Name",
+      "username": "Username",
+      "email": "Email",
+      "role": "Role",
+      "password": "Password",
+      "newPassword": "New password (leave blank to keep)",
+      "title": "Title",
+      "description": "Description",
+      "category": "Category",
+      "date": "Date",
+      "price": "Price",
+      "priceWithCurrency": "Price ($)",
+      "start": "Start",
+      "end": "End",
+      "venue": "Venue",
+      "address": "Address",
+      "artistHost": "Artist / Host (optional)"
+    },
+    "roles": {
+      "admin": "admin",
+      "consumer": "consumer",
+      "publisher": "publisher"
+    },
+    "users": {
+      "count_one": "{{count}} user",
+      "count_other": "{{count}} users",
+      "new": "New user",
+      "edit": "Edit user",
+      "confirmDelete": "Delete user \"{{name}}\"?",
+      "deleted": "User deleted.",
+      "deleteFailed": "Failed to delete user.",
+      "updated": "User updated.",
+      "updateFailed": "Failed to update user.",
+      "created": "User created.",
+      "createFailed": "Failed to create user."
+    },
+    "events": {
+      "new": "New event",
+      "edit": "Edit event",
+      "confirmDelete": "Delete event \"{{title}}\"?",
+      "deleted": "Event deleted.",
+      "deleteFailed": "Failed to delete event.",
+      "updated": "Event updated.",
+      "updateFailed": "Failed to update event.",
+      "created": "Event created.",
+      "createFailed": "Failed to create event."
+    }
+  }
+}

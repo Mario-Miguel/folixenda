@@ -3,17 +3,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Search, Bell, Ticket, ShieldAlert } from "lucide-react";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { getStoredUser } from "@/lib/auth";
 import type { User } from "@/lib/types";
 
 const NAV_LINKS = [
-  { href: "/", label: "Discover" },
-  { href: "/my-events", label: "My Events" },
-  { href: "/community", label: "Community" },
-];
+  { href: "/", label: "nav.discover" },
+  { href: "/my-events", label: "nav.myEvents" },
+  { href: "/community", label: "nav.community" },
+] as const;
 
 export default function Navbar() {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -47,7 +50,7 @@ export default function Navbar() {
                 }`}
                 style={isActive ? { color: "#ec5b13" } : undefined}
               >
-                {link.label}
+                {t(link.label)}
               </Link>
             );
           })}
@@ -58,6 +61,7 @@ export default function Navbar() {
 
         {/* Actions */}
         <div className="flex items-center gap-3">
+          <LanguageSwitcher />
           {currentUser?.role === "admin" && (
             <Link
               href="/admin"
@@ -69,13 +73,19 @@ export default function Navbar() {
               style={pathname === "/admin" ? { color: "#ec5b13" } : undefined}
             >
               <ShieldAlert className="w-4 h-4" />
-              Admin
+              {t("nav.admin")}
             </Link>
           )}
-          <button className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
+          <button
+            aria-label={t("nav.search")}
+            className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
+          >
             <Search className="w-5 h-5" />
           </button>
-          <button className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors relative">
+          <button
+            aria-label={t("nav.notifications")}
+            className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors relative"
+          >
             <Bell className="w-5 h-5" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" style={{ backgroundColor: "#ec5b13" }} />
           </button>

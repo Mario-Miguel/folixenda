@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { User, Event, EventCategory } from "@/lib/types";
 import { getUsers, createUser, updateUser, deleteUser } from "@/lib/api/users";
 import { login } from "@/lib/api/auth";
@@ -43,6 +44,7 @@ export default function AdminPage() {
 // ── Login ─────────────────────────────────────────────────────────────────────
 
 function LoginSection({ onLogin }: { onLogin: (u: User) => void }) {
+  const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -55,15 +57,13 @@ function LoginSection({ onLogin }: { onLogin: (u: User) => void }) {
     try {
       const u = await login(username, password);
       if (u.role !== "admin") {
-        setError("This account does not have admin access.");
+        setError(t("admin.noAdminAccess"));
         return;
       }
       onLogin(u);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
-      setError(
-        msg === "invalid_credentials" ? "Wrong username or password." : "Something went wrong. Please try again.",
-      );
+      setError(msg === "invalid_credentials" ? t("admin.wrongCredentials") : t("admin.genericError"));
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ function LoginSection({ onLogin }: { onLogin: (u: User) => void }) {
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2 mb-8 justify-center">
           <ShieldAlert className="w-6 h-6" style={{ color: "#ec5b13" }} />
-          <h1 className="text-2xl font-bold text-gray-900">Admin access</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("admin.access")}</h1>
         </div>
 
         <form
@@ -82,7 +82,7 @@ function LoginSection({ onLogin }: { onLogin: (u: User) => void }) {
           className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex flex-col gap-5"
         >
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">Username</label>
+            <label className="text-sm font-medium text-gray-700">{t("admin.fields.username")}</label>
             <input
               type="text"
               value={username}
@@ -94,7 +94,7 @@ function LoginSection({ onLogin }: { onLogin: (u: User) => void }) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700">Password</label>
+            <label className="text-sm font-medium text-gray-700">{t("admin.fields.password")}</label>
             <input
               type="password"
               value={password}
@@ -112,7 +112,7 @@ function LoginSection({ onLogin }: { onLogin: (u: User) => void }) {
             className="w-full py-2.5 rounded-lg text-sm font-semibold text-white transition disabled:opacity-60"
             style={{ backgroundColor: "#ec5b13" }}
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? t("admin.signingIn") : t("admin.signIn")}
           </button>
         </form>
       </div>
@@ -123,6 +123,7 @@ function LoginSection({ onLogin }: { onLogin: (u: User) => void }) {
 // ── Dashboard shell ───────────────────────────────────────────────────────────
 
 function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<"users" | "events">("users");
 
   return (
@@ -130,30 +131,30 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Logged in as {user.name}</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("admin.dashboard")}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t("admin.loggedInAs", { name: user.name })}</p>
         </div>
         <button
           onClick={onLogout}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition"
         >
           <LogOut className="w-4 h-4" />
-          Log out
+          {t("admin.logOut")}
         </button>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {(["users", "events"] as const).map((t) => (
+        {(["users", "events"] as const).map((key) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={key}
+            onClick={() => setTab(key)}
             className={`px-5 py-2.5 text-sm font-medium capitalize transition -mb-px border-b-2 ${
-              tab === t ? "border-orange-500 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700"
+              tab === key ? "border-orange-500 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
-            style={tab === t ? { borderColor: "#ec5b13", color: "#1a1a1a" } : undefined}
+            style={tab === key ? { borderColor: "#ec5b13", color: "#1a1a1a" } : undefined}
           >
-            {t}
+            {t(`admin.tabs.${key}`)}
           </button>
         ))}
       </div>
@@ -168,6 +169,7 @@ function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
 type UserModal = { mode: "create" } | { mode: "edit"; user: User };
 
 function UsersSection() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<UserModal | null>(null);
@@ -186,13 +188,13 @@ function UsersSection() {
   }, []);
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete user "${name}"?`)) return;
+    if (!confirm(t("admin.users.confirmDelete", { name }))) return;
     try {
       await deleteUser(id);
-      setFeedback("User deleted.");
+      setFeedback(t("admin.users.deleted"));
       load();
     } catch {
-      setFeedback("Failed to delete user.");
+      setFeedback(t("admin.users.deleteFailed"));
     }
   }
 
@@ -200,42 +202,48 @@ function UsersSection() {
     try {
       if (id) {
         await updateUser(id, data);
-        setFeedback("User updated.");
+        setFeedback(t("admin.users.updated"));
       } else {
         await createUser(data as Omit<User, "id"> & { password: string });
-        setFeedback("User created.");
+        setFeedback(t("admin.users.created"));
       }
       setModal(null);
       load();
     } catch {
-      setFeedback(id ? "Failed to update user." : "Failed to create user.");
+      setFeedback(id ? t("admin.users.updateFailed") : t("admin.users.createFailed"));
     }
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">{users.length} users</p>
+        <p className="text-sm text-gray-500">{t("admin.users.count", { count: users.length })}</p>
         <button
           onClick={() => setModal({ mode: "create" })}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white transition"
           style={{ backgroundColor: "#ec5b13" }}
         >
           <Plus className="w-4 h-4" />
-          New user
+          {t("admin.users.new")}
         </button>
       </div>
 
       {feedback && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 mb-4">{feedback}</p>}
 
       {loading ? (
-        <p className="text-sm text-gray-400 py-10 text-center">Loading…</p>
+        <p className="text-sm text-gray-400 py-10 text-center">{t("common.loading")}</p>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {["Name", "Username", "Email", "Role", ""].map((h) => (
+                {[
+                  t("admin.fields.name"),
+                  t("admin.fields.username"),
+                  t("admin.fields.email"),
+                  t("admin.fields.role"),
+                  "",
+                ].map((h) => (
                   <th
                     key={h}
                     className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide"
@@ -258,12 +266,14 @@ function UsersSection() {
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setModal({ mode: "edit", user: u })}
+                        aria-label={t("common.edit")}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(u.id, u.name)}
+                        aria-label={t("common.delete")}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -282,7 +292,8 @@ function UsersSection() {
   );
 }
 
-function RoleBadge({ role }: { role: string }) {
+function RoleBadge({ role }: { role: User["role"] }) {
+  const { t } = useTranslation();
   const colors: Record<string, string> = {
     admin: "bg-orange-100 text-orange-700",
     publisher: "bg-blue-100 text-blue-700",
@@ -292,7 +303,7 @@ function RoleBadge({ role }: { role: string }) {
     <span
       className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[role] ?? "bg-gray-100 text-gray-600"}`}
     >
-      {role}
+      {t(`admin.roles.${role}`)}
     </span>
   );
 }
@@ -306,6 +317,7 @@ function UserModalForm({
   onSave: (data: Partial<User> & { password?: string }, id?: string) => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const editing = modal.mode === "edit" ? modal.user : null;
   const [form, setForm] = useState({
     name: editing?.name ?? "",
@@ -335,12 +347,12 @@ function UserModalForm({
   }
 
   return (
-    <Modal title={editing ? "Edit user" : "New user"} onClose={onClose}>
+    <Modal title={editing ? t("admin.users.edit") : t("admin.users.new")} onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Field label="Name">
+        <Field label={t("admin.fields.name")}>
           <input className={inputCls} value={form.name} onChange={(e) => set("name", e.target.value)} required />
         </Field>
-        <Field label="Username">
+        <Field label={t("admin.fields.username")}>
           <input
             className={inputCls}
             value={form.username}
@@ -348,7 +360,7 @@ function UserModalForm({
             required
           />
         </Field>
-        <Field label="Email">
+        <Field label={t("admin.fields.email")}>
           <input
             type="email"
             className={inputCls}
@@ -357,16 +369,16 @@ function UserModalForm({
             required
           />
         </Field>
-        <Field label="Role">
+        <Field label={t("admin.fields.role")}>
           <select className={inputCls} value={form.role} onChange={(e) => set("role", e.target.value)}>
             {ROLES.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {t(`admin.roles.${r}`)}
               </option>
             ))}
           </select>
         </Field>
-        <Field label={editing ? "New password (leave blank to keep)" : "Password"}>
+        <Field label={editing ? t("admin.fields.newPassword") : t("admin.fields.password")}>
           <input
             type="password"
             className={inputCls}
@@ -386,6 +398,7 @@ function UserModalForm({
 type EventModal = { mode: "create" } | { mode: "edit"; event: Event };
 
 function EventsSection() {
+  const { t } = useTranslation();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<EventModal | null>(null);
@@ -405,13 +418,13 @@ function EventsSection() {
   }, []);
 
   async function handleDelete(id: string, title: string) {
-    if (!confirm(`Delete event "${title}"?`)) return;
+    if (!confirm(t("admin.events.confirmDelete", { title }))) return;
     try {
       await deleteEvent(id);
-      setFeedback("Event deleted.");
+      setFeedback(t("admin.events.deleted"));
       load();
     } catch {
-      setFeedback("Failed to delete event.");
+      setFeedback(t("admin.events.deleteFailed"));
     }
   }
 
@@ -419,42 +432,48 @@ function EventsSection() {
     try {
       if (id) {
         await updateEvent(id, data);
-        setFeedback("Event updated.");
+        setFeedback(t("admin.events.updated"));
       } else {
         await createEvent(data as Omit<Event, "id">);
-        setFeedback("Event created.");
+        setFeedback(t("admin.events.created"));
       }
       setModal(null);
       load();
     } catch {
-      setFeedback(id ? "Failed to update event." : "Failed to create event.");
+      setFeedback(id ? t("admin.events.updateFailed") : t("admin.events.createFailed"));
     }
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">{events.length} events</p>
+        <p className="text-sm text-gray-500">{t("common.eventCount", { count: events.length })}</p>
         <button
           onClick={() => setModal({ mode: "create" })}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white transition"
           style={{ backgroundColor: "#ec5b13" }}
         >
           <Plus className="w-4 h-4" />
-          New event
+          {t("admin.events.new")}
         </button>
       </div>
 
       {feedback && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 mb-4">{feedback}</p>}
 
       {loading ? (
-        <p className="text-sm text-gray-400 py-10 text-center">Loading…</p>
+        <p className="text-sm text-gray-400 py-10 text-center">{t("common.loading")}</p>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                {["Title", "Category", "Date", "Price", ""].map((h) => (
+                {[
+                  t("admin.fields.title"),
+                  t("admin.fields.category"),
+                  t("admin.fields.date"),
+                  t("admin.fields.price"),
+                  "",
+                ].map((h) => (
                   <th
                     key={h}
                     className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide"
@@ -468,19 +487,21 @@ function EventsSection() {
               {events.map((ev) => (
                 <tr key={ev.id} className="hover:bg-gray-50 transition">
                   <td className="px-5 py-3 font-medium text-gray-900 max-w-xs truncate">{ev.title}</td>
-                  <td className="px-5 py-3 text-gray-600">{ev.category}</td>
+                  <td className="px-5 py-3 text-gray-600">{t(`categories.${ev.category}`)}</td>
                   <td className="px-5 py-3 text-gray-600">{ev.date}</td>
-                  <td className="px-5 py-3 text-gray-600">{ev.price === 0 ? "Free" : `$${ev.price}`}</td>
+                  <td className="px-5 py-3 text-gray-600">{ev.price === 0 ? t("common.free") : t("common.price", { price: ev.price })}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2 justify-end">
                       <button
                         onClick={() => setModal({ mode: "edit", event: ev })}
+                        aria-label={t("common.edit")}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(ev.id, ev.title)}
+                        aria-label={t("common.delete")}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -508,6 +529,7 @@ function EventModalForm({
   onSave: (data: Partial<Event>, id?: string) => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const editing = modal.mode === "edit" ? modal.event : null;
   const [form, setForm] = useState({
     title: editing?.title ?? "",
@@ -548,12 +570,12 @@ function EventModalForm({
   }
 
   return (
-    <Modal title={editing ? "Edit event" : "New event"} onClose={onClose}>
+    <Modal title={editing ? t("admin.events.edit") : t("admin.events.new")} onClose={onClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Field label="Title">
+        <Field label={t("admin.fields.title")}>
           <input className={inputCls} value={form.title} onChange={(e) => set("title", e.target.value)} required />
         </Field>
-        <Field label="Description">
+        <Field label={t("admin.fields.description")}>
           <textarea
             className={`${inputCls} resize-none`}
             rows={3}
@@ -561,17 +583,17 @@ function EventModalForm({
             onChange={(e) => set("description", e.target.value)}
           />
         </Field>
-        <Field label="Category">
+        <Field label={t("admin.fields.category")}>
           <select className={inputCls} value={form.category} onChange={(e) => set("category", e.target.value)}>
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>
-                {c}
+                {t(`categories.${c}`)}
               </option>
             ))}
           </select>
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Start">
+          <Field label={t("admin.fields.start")}>
             <input
               type="datetime-local"
               className={inputCls}
@@ -580,7 +602,7 @@ function EventModalForm({
               required
             />
           </Field>
-          <Field label="End">
+          <Field label={t("admin.fields.end")}>
             <input
               type="datetime-local"
               className={inputCls}
@@ -590,14 +612,14 @@ function EventModalForm({
             />
           </Field>
         </div>
-        <Field label="Venue">
+        <Field label={t("admin.fields.venue")}>
           <input className={inputCls} value={form.venue} onChange={(e) => set("venue", e.target.value)} required />
         </Field>
-        <Field label="Address">
+        <Field label={t("admin.fields.address")}>
           <input className={inputCls} value={form.address} onChange={(e) => set("address", e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Price ($)">
+          <Field label={t("admin.fields.priceWithCurrency")}>
             <input
               type="number"
               min="0"
@@ -607,7 +629,7 @@ function EventModalForm({
               onChange={(e) => set("price", e.target.value)}
             />
           </Field>
-          <Field label="Artist / Host (optional)">
+          <Field label={t("admin.fields.artistHost")}>
             <input className={inputCls} value={form.artistName} onChange={(e) => set("artistName", e.target.value)} />
           </Field>
         </div>
@@ -632,6 +654,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function ModalActions({ onClose, saving }: { onClose: () => void; saving: boolean }) {
+  const { t } = useTranslation();
   return (
     <div className="flex justify-end gap-2 pt-2">
       <button
@@ -639,7 +662,7 @@ function ModalActions({ onClose, saving }: { onClose: () => void; saving: boolea
         onClick={onClose}
         className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition"
       >
-        Cancel
+        {t("common.cancel")}
       </button>
       <button
         type="submit"
@@ -647,13 +670,14 @@ function ModalActions({ onClose, saving }: { onClose: () => void; saving: boolea
         className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition disabled:opacity-60"
         style={{ backgroundColor: "#ec5b13" }}
       >
-        {saving ? "Saving…" : "Save"}
+        {saving ? t("common.saving") : t("common.save")}
       </button>
     </div>
   );
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const { t } = useTranslation();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
@@ -664,7 +688,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-y-auto max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition text-xl leading-none">
+          <button
+            onClick={onClose}
+            aria-label={t("common.close")}
+            className="text-gray-400 hover:text-gray-700 transition text-xl leading-none"
+          >
             &times;
           </button>
         </div>

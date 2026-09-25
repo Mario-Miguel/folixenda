@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import CalendarWidget from "@/components/CalendarWidget";
 import CategoryFilter from "@/components/CategoryFilter";
 import EventCard from "@/components/EventCard";
@@ -10,20 +11,14 @@ import { Event } from "@/lib/types";
 import { CalendarDays } from "lucide-react";
 import SwitchMapWidget from "@/components/SwitchMapWidget";
 import CompactEventList from "@/components/CompactEventList";
-
-function formatDate(date: Date) {
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
+import { formatLongDate } from "@/i18n/format";
 
 function toISODateStr(d: Date) {
   return d.toISOString().split("T")[0];
 }
 
 export default function HomePage() {
+  const { t, i18n } = useTranslation();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showMap, setShowMap] = useState(false);
@@ -68,9 +63,9 @@ export default function HomePage() {
         <section className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{formatDate(selectedDate)}</h2>
+              <h2 className="text-xl font-bold text-gray-900">{formatLongDate(selectedDate, i18n.language)}</h2>
               <p className="text-sm text-gray-500 mt-0.5">
-                {dayEvents.length} {dayEvents.length === 1 ? "event" : "events"} found
+                {t("common.eventsFound", { count: dayEvents.length })}
               </p>
             </div>
           </div>
@@ -90,8 +85,8 @@ export default function HomePage() {
           {dayEvents.length === 0 ? (
             <div className={`text-center py-20 text-gray-400 ${showMap ? "lg:hidden" : ""}`}>
               <CalendarDays className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No events on this day</p>
-              <p className="text-sm mt-1">Try selecting a different date or category</p>
+              <p className="font-medium">{t("common.noEventsOnDay")}</p>
+              <p className="text-sm mt-1">{t("common.tryDifferentFilter")}</p>
             </div>
           ) : (
             <div className={`flex flex-col gap-3 ${showMap ? "lg:hidden" : ""}`}>
@@ -103,7 +98,7 @@ export default function HomePage() {
 
           {/* Mobile map */}
           <div className="mt-8 lg:hidden">
-            <h3 className="font-semibold text-gray-900 mb-3">Events Map</h3>
+            <h3 className="font-semibold text-gray-900 mb-3">{t("common.eventsMap")}</h3>
             <MapView />
           </div>
         </section>

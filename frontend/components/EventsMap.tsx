@@ -3,6 +3,7 @@
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Circle, MapContainer, Marker, TileLayer, Tooltip, useMap } from "react-leaflet";
 
 // Leaflet touches `window` on import: load this component with next/dynamic and `ssr: false`.
@@ -66,6 +67,7 @@ function FlyToSelected({ marker }: { marker?: MapMarker }) {
 }
 
 export default function EventsMap({ markers = [], selectedId = null, onSelect }: EventsMapProps) {
+  const { t } = useTranslation();
   const selected = markers.find((m) => m.id === selectedId);
 
   return (
@@ -82,7 +84,7 @@ export default function EventsMap({ markers = [], selectedId = null, onSelect }:
         const tooltip = (
           <Tooltip direction="top" permanent={isSelected}>
             <span className="font-semibold">{m.title}</span>
-            {!m.precise && <span className="block text-gray-500">Approximate location</span>}
+            {!m.precise && <span className="block text-gray-500">{t("common.approximateLocation")}</span>}
           </Tooltip>
         );
 
