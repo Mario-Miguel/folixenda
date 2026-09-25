@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Clock, MapPin, Calendar, ChevronLeft, Star, Share2, Bookmark } from "lucide-react";
 import { getEvent, getEvents } from "@/lib/api/events";
 import EventCard from "@/components/EventCard";
+import EventImage from "@/components/EventImage";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Music: "bg-purple-100 text-purple-700",
@@ -51,7 +52,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
 
       {/* Hero */}
       <div className="rounded-2xl overflow-hidden bg-gradient-to-br from-orange-100 to-orange-300 h-64 mb-6 relative flex items-center justify-center">
-        <span className="text-8xl opacity-20 select-none">🎵</span>
+        {/* Gradient background shows through when there is no image or it fails to load */}
+        <EventImage src={event.imageUrl} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute top-4 right-4 flex gap-2">
           <button className="w-9 h-9 flex items-center justify-center rounded-full bg-white/80 backdrop-blur-sm text-gray-600 hover:text-gray-900 transition-colors">
             <Share2 className="w-4 h-4" />

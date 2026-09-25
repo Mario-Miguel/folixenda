@@ -29,3 +29,20 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Map hover card: strip Leaflet's popup chrome so the EventCard is the whole popup */
+.event-map-popup .leaflet-popup-content-wrapper {
+  padding: 0;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.event-map-popup .leaflet-popup-content {
+  margin: 0;
+  width: auto !important;
+  line-height: normal;
+}
+
+.event-map-popup .leaflet-popup-content p {
+  margin: 0;
+}

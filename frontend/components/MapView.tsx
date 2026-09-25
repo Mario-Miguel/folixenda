@@ -40,7 +40,7 @@ export default function MapView({
     lat: e.lat || 43.3614,
     lon: e.lon || -5.8494,
     precise: e.lat != null && e.lon != null,
-    title: e.title,
+    event: e,
     color: "#14b8a6",
   }));
 
