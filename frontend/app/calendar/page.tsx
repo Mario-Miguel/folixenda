@@ -2,29 +2,15 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, Map as MapIcon, CalendarDays } from "lucide-react";
 import CategoryFilter from "@/components/CategoryFilter";
 import MapView from "@/components/MapView";
 import { getEvents } from "@/lib/api/events";
-import { Event } from "@/lib/types";
+import { Event, EventCategory } from "@/lib/types";
+import { formatMonthYear, weekdayNames } from "@/i18n/format";
 
-const DAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-const CATEGORY_DOT_COLORS: Record<string, string> = {
+const CATEGORY_DOT_COLORS: Record<EventCategory, string> = {
   Music: "#8b5cf6",
   Theater: "#3b82f6",
   Parties: "#ec4899",
@@ -39,6 +25,7 @@ function toISODateStr(year: number, month: number, day: number) {
 }
 
 export default function CalendarPage() {
+  const { t, i18n } = useTranslation();
   const [viewDate, setViewDate] = useState(new Date(2024, 9, 1)); // October 2024
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showMap, setShowMap] = useState(false);
@@ -82,12 +69,12 @@ export default function CalendarPage() {
       {/* Tab bar */}
       <div className="flex items-center gap-1 mb-6 border-b border-gray-200">
         {[
-          { href: "/calendar", label: "Calendar", active: true },
-          { href: "/", label: "Discover", active: false },
-          { href: "/my-events", label: "My Tickets", active: false },
+          { href: "/calendar", label: t("common.calendar"), active: true },
+          { href: "/", label: t("nav.discover"), active: false },
+          { href: "/my-events", label: t("nav.myTickets"), active: false },
         ].map(({ href, label, active }) => (
           <Link
-            key={label}
+            key={href}
             href={href}
             className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
               active ? "border-primary text-primary" : "border-transparent text-gray-500 hover:text-gray-800"
@@ -109,15 +96,17 @@ export default function CalendarPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={prevMonth}
+            aria-label={t("common.previousMonth")}
             className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <h2 className="text-lg font-bold text-gray-900 min-w-[160px] text-center">
-            {MONTHS[month]} {year}
+            {formatMonthYear(year, month, i18n.language)}
           </h2>
           <button
             onClick={nextMonth}
+            aria-label={t("common.nextMonth")}
             className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 transition-colors text-gray-600"
           >
             <ChevronRight className="w-4 h-4" />
@@ -133,7 +122,7 @@ export default function CalendarPage() {
             style={!showMap ? { backgroundColor: "#ec5b13" } : undefined}
           >
             <CalendarDays className="w-4 h-4" />
-            Calendar
+            {t("common.calendar")}
           </button>
           <button
             onClick={() => setShowMap(true)}
@@ -143,7 +132,7 @@ export default function CalendarPage() {
             style={showMap ? { backgroundColor: "#ec5b13" } : undefined}
           >
             <MapIcon className="w-4 h-4" />
-            Map
+            {t("common.map")}
           </button>
         </div>
       </div>
@@ -154,8 +143,8 @@ export default function CalendarPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {/* Day headers */}
           <div className="grid grid-cols-7 border-b border-gray-100">
-            {DAYS_SHORT.map((day) => (
-              <div key={day} className="py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wide">
+            {weekdayNames(i18n.language, "short").map((day, i) => (
+              <div key={i} className="py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wide">
                 {day}
               </div>
             ))}
@@ -185,7 +174,7 @@ export default function CalendarPage() {
                         </Link>
                       ))}
                       {events.length > 2 && (
-                        <span className="text-xs text-gray-400 font-medium">+{events.length - 2} more</span>
+                        <span className="text-xs text-gray-400 font-medium">{t("common.moreCount", { count: events.length - 2 })}</span>
                       )}
                     </div>
                   </>
@@ -199,10 +188,10 @@ export default function CalendarPage() {
       {/* Map toggle: show legend below when in map mode */}
       {!showMap && (
         <div className="mt-4 flex flex-wrap gap-3">
-          {Object.entries(CATEGORY_DOT_COLORS).map(([label, color]) => (
+          {(Object.entries(CATEGORY_DOT_COLORS) as [EventCategory, string][]).map(([label, color]) => (
             <div key={label} className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
-              <span className="text-xs text-gray-500">{label}</span>
+              <span className="text-xs text-gray-500">{t(`categories.${label}`)}</span>
             </div>
           ))}
         </div>

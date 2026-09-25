@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock, MapPin } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Event } from "@/lib/types";
 import { CATEGORY_COLORS } from "@/components/EventCard";
 
@@ -11,10 +12,12 @@ interface CompactEventListProps {
 }
 
 export default function CompactEventList({ events, selectedEventId, onSelect }: CompactEventListProps) {
+  const { t } = useTranslation();
+
   if (events.length === 0) {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center text-sm text-gray-400">
-        No events on this day
+        {t("common.noEventsOnDay")}
       </div>
     );
   }
@@ -22,7 +25,7 @@ export default function CompactEventList({ events, selectedEventId, onSelect }: 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <p className="px-4 pt-3 pb-2 text-xs font-medium text-gray-500">
-        {events.length} {events.length === 1 ? "event" : "events"}
+        {t("common.eventCount", { count: events.length })}
       </p>
       <ul className="max-h-[28rem] overflow-y-auto divide-y divide-gray-100">
         {events.map((event) => {
@@ -48,7 +51,7 @@ export default function CompactEventList({ events, selectedEventId, onSelect }: 
                     {event.title}
                   </h3>
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${categoryColor}`}>
-                    {event.category}
+                    {t(`categories.${event.category}`)}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 min-w-0">

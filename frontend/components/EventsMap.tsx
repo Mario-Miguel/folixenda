@@ -3,6 +3,7 @@
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import EventCard from "@/components/EventCard";
 import type { Event } from "@/lib/types";
@@ -74,6 +75,7 @@ function FlyToSelected({ marker }: { marker?: MapMarker }) {
 }
 
 export default function EventsMap({ markers = [], selectedId = null, onSelect }: EventsMapProps) {
+  const { t } = useTranslation();
   const selected = markers.find((m) => m.id === selectedId);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hovered = markers.find((m) => m.id === hoveredId);
@@ -110,9 +112,7 @@ export default function EventsMap({ markers = [], selectedId = null, onSelect }:
       minWidth={240}
       maxWidth={240}
       className="event-map-popup"
-      eventHandlers={
-        isSelected ? undefined : { remove: () => setHoveredId((cur) => (cur === m.id ? null : cur)) }
-      }
+      eventHandlers={isSelected ? undefined : { remove: () => setHoveredId((cur) => (cur === m.id ? null : cur)) }}
     >
       <div className="w-60" onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
         <EventCard event={m.event} detailed={false} approximateLocation={!m.precise} />

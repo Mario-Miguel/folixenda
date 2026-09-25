@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "title": "folixenda – Descubre eventos locales",
+    "description": "Encuentra y explora eventos de música, teatro, arte, gastronomía y mucho más cerca de ti."
+  },
+  "common": {
+    "free": "Gratis",
+    "price": "{{price}} $",
+    "fromPrice": "Desde {{price}} $",
+    "getTickets": "Comprar entradas",
+    "loading": "Cargando…",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "calendar": "Calendario",
+    "map": "Mapa",
+    "eventList": "Lista de eventos",
+    "eventCount_one": "{{count}} evento",
+    "eventCount_other": "{{count}} eventos",
+    "eventsFound_one": "{{count}} evento encontrado",
+    "eventsFound_other": "{{count}} eventos encontrados",
+    "noEventsOnDay": "No hay eventos este día",
+    "tryDifferentFilter": "Prueba a seleccionar otra fecha o categoría",
+    "eventTypes": "Tipos de evento",
+    "eventsMap": "Mapa de eventos",
+    "approximateLocation": "Ubicación aproximada",
+    "previousMonth": "Mes anterior",
+    "nextMonth": "Mes siguiente",
+    "moreCount": "+{{count}} más"
+  },
+  "categories": {
+    "All": "Todos",
+    "Music": "Música",
+    "Theater": "Teatro",
+    "Parties": "Fiestas",
+    "Sports": "Deportes",
+    "Food": "Gastronomía",
+    "Art": "Arte",
+    "Wellness": "Bienestar"
+  },
+  "nav": {
+    "discover": "Descubrir",
+    "myEvents": "Mis eventos",
+    "myTickets": "Mis entradas",
+    "community": "Comunidad",
+    "admin": "Admin",
+    "search": "Buscar",
+    "notifications": "Notificaciones",
+    "language": "Idioma"
+  },
+  "event": {
+    "backToEvents": "Volver a los eventos",
+    "share": "Compartir",
+    "by": "por",
+    "date": "Fecha",
+    "time": "Hora",
+    "venue": "Lugar",
+    "whatsIncluded": "Qué incluye",
+    "price": "Precio",
+    "perPerson": "por persona",
+    "sellingFast": "🔥 Se agotan rápido",
+    "registerFree": "Inscríbete gratis",
+    "saveForLater": "Guardar para después",
+    "moreCategoryEvents": "Más eventos de {{category}}"
+  },
+  "admin": {
+    "access": "Acceso de administrador",
+    "noAdminAccess": "Esta cuenta no tiene acceso de administrador.",
+    "wrongCredentials": "Usuario o contraseña incorrectos.",
+    "genericError": "Algo ha ido mal. Inténtalo de nuevo.",
+    "signIn": "Iniciar sesión",
+    "signingIn": "Iniciando sesión…",
+    "dashboard": "Panel de administración",
+    "loggedInAs": "Sesión iniciada como {{name}}",
+    "logOut": "Cerrar sesión",
+    "tabs": {
+      "users": "Usuarios",
+      "events": "Eventos"
+    },
+    "fields": {
+      "name": "Nombre",
+      "username": "Usuario",
+      "email": "Correo electrónico",
+      "role": "Rol",
+      "password": "Contraseña",
+      "newPassword": "Nueva contraseña (déjala vacía para mantenerla)",
+      "title": "Título",
+      "description": "Descripción",
+      "category": "Categoría",
+      "date": "Fecha",
+      "price": "Precio",
+      "priceWithCurrency": "Precio ($)",
+      "start": "Inicio",
+      "end": "Fin",
+      "venue": "Lugar",
+      "address": "Dirección",
+      "artistHost": "Artista / Organizador (opcional)"
+    },
+    "roles": {
+      "admin": "admin",
+      "consumer": "consumidor",
+      "publisher": "publicador"
+    },
+    "users": {
+      "count_one": "{{count}} usuario",
+      "count_other": "{{count}} usuarios",
+      "new": "Nuevo usuario",
+      "edit": "Editar usuario",
+      "confirmDelete": "¿Eliminar el usuario \"{{name}}\"?",
+      "deleted": "Usuario eliminado.",
+      "deleteFailed": "No se pudo eliminar el usuario.",
+      "updated": "Usuario actualizado.",
+      "updateFailed": "No se pudo actualizar el usuario.",
+      "created": "Usuario creado.",
+      "createFailed": "No se pudo crear el usuario."
+    },
+    "events": {
+      "new": "Nuevo evento",
+      "edit": "Editar evento",
+      "confirmDelete": "¿Eliminar el evento \"{{title}}\"?",
+      "deleted": "Evento eliminado.",
+      "deleteFailed": "No se pudo eliminar el evento.",
+      "updated": "Evento actualizado.",
+      "updateFailed": "No se pudo actualizar el evento.",
+      "created": "Evento creado.",
+      "createFailed": "No se pudo crear el evento."
+    }
+  }
+}

@@ -1,4 +1,7 @@
+"use client";
+
 import { Map, List } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface SwitchMapWidgetProps {
   showMap: boolean;
@@ -6,6 +9,8 @@ interface SwitchMapWidgetProps {
 }
 
 export default function SwitchMapWidget({ showMap, setShowMap }: SwitchMapWidgetProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex rounded-xl border border-gray-200 overflow-hidden bg-white">
       <button
@@ -16,7 +21,7 @@ export default function SwitchMapWidget({ showMap, setShowMap }: SwitchMapWidget
         style={!showMap ? { backgroundColor: "#ec5b13" } : undefined}
       >
         <List className="w-4 h-4" />
-        Event list
+        {t("common.eventList")}
       </button>
       <button
         onClick={() => setShowMap(true)}
@@ -26,7 +31,7 @@ export default function SwitchMapWidget({ showMap, setShowMap }: SwitchMapWidget
         style={showMap ? { backgroundColor: "#ec5b13" } : undefined}
       >
         <Map className="w-4 h-4" />
-        Map
+        {t("common.map")}
       </button>
     </div>
   );

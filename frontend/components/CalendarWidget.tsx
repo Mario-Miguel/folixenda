@@ -2,12 +2,8 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-
-const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
+import { useTranslation } from "react-i18next";
+import { formatMonthYear, weekdayNames } from "@/i18n/format";
 
 interface CalendarWidgetProps {
   selectedDate: Date;
@@ -24,6 +20,7 @@ export default function CalendarWidget({
   onSelect,
   eventDates = new Set(),
 }: CalendarWidgetProps) {
+  const { t, i18n } = useTranslation();
   const [viewDate, setViewDate] = useState(
     new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
   );
@@ -47,17 +44,19 @@ export default function CalendarWidget({
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <span className="font-semibold text-gray-900 text-sm">
-          {MONTHS[month]} {year}
+          {formatMonthYear(year, month, i18n.language)}
         </span>
         <div className="flex items-center gap-1">
           <button
             onClick={prevMonth}
+            aria-label={t("common.previousMonth")}
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-500"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={nextMonth}
+            aria-label={t("common.nextMonth")}
             className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-500"
           >
             <ChevronRight className="w-4 h-4" />
@@ -67,9 +66,9 @@ export default function CalendarWidget({
 
       {/* Day headers */}
       <div className="grid grid-cols-7 mb-2">
-        {DAYS.map((d) => (
-          <div key={d} className="text-center text-xs text-gray-400 font-medium py-1">
-            {d}
+        {weekdayNames(i18n.language, "short").map((d, i) => (
+          <div key={i} className="text-center text-xs text-gray-400 font-medium py-1">
+            {d.slice(0, 2)}
           </div>
         ))}
       </div>

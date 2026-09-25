@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { MapPin } from "lucide-react";
-import { Event } from "@/lib/types";
+import { useTranslation } from "react-i18next";
+import { Event, EventCategory } from "@/lib/types";
 import type { MapMarker } from "@/components/EventsMap";
 
 const EventsMap = dynamic(() => import("@/components/EventsMap"), {
@@ -10,7 +11,7 @@ const EventsMap = dynamic(() => import("@/components/EventsMap"), {
   loading: () => <div className="h-full w-full animate-pulse bg-gray-100" />,
 });
 
-const LEGEND_ITEMS = {
+const LEGEND_ITEMS: Partial<Record<EventCategory, string>> = {
   Music: "#8b5cf6",
   Theater: "#3b82f6",
   Parties: "#ec4899",
@@ -32,6 +33,7 @@ export default function MapView({
   onSelectEvent,
   className = "h-72",
 }: MapViewProps) {
+  const { t } = useTranslation();
   const selectedEvent = events.find((e) => e.id === selectedEventId);
   // TODO: build markers from events once the API returns event coordinates (lat/lon),
   // using LEGEND_ITEMS for the category color
@@ -62,12 +64,12 @@ export default function MapView({
 
       {/* Legend */}
       <div className="px-5 py-3 border-t border-gray-100">
-        <p className="text-xs font-medium text-gray-500 mb-2">Event types</p>
+        <p className="text-xs font-medium text-gray-500 mb-2">{t("common.eventTypes")}</p>
         <div className="flex flex-wrap gap-3">
-          {Object.entries(LEGEND_ITEMS).map(([label, color]) => (
+          {(Object.entries(LEGEND_ITEMS) as [EventCategory, string][]).map(([label, color]) => (
             <div key={label} className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-              <span className="text-xs text-gray-600">{label}</span>
+              <span className="text-xs text-gray-600">{t(`categories.${label}`)}</span>
             </div>
           ))}
         </div>
