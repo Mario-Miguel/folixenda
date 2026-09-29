@@ -52,8 +52,14 @@
     "notifications": "Notifications",
     "language": "Language"
   },
+  "myEvents": {
+    "noSavedEvents": "You have no upcoming saved events",
+    "browseEvents": "Discover events to save",
+    "loadError": "Couldn't load your saved events"
+  },
   "event": {
     "backToEvents": "Back to events",
+    "backToMyEvents": "Back to my events",
     "share": "Share",
     "by": "by",
     "date": "Date",

@@ -52,8 +52,14 @@
     "notifications": "Notificaciones",
     "language": "Idioma"
   },
+  "myEvents": {
+    "noSavedEvents": "No tienes eventos guardados próximos",
+    "browseEvents": "Descubre eventos para guardar",
+    "loadError": "No se han podido cargar tus eventos guardados"
+  },
   "event": {
     "backToEvents": "Volver a los eventos",
+    "backToMyEvents": "Volver a mis eventos",
     "share": "Compartir",
     "by": "por",
     "date": "Fecha",

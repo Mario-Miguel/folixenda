@@ -21,8 +21,22 @@ const CATEGORY_COLORS: Record<string, string> = {
   Wellness: "bg-teal-100 text-teal-700",
 };
 
-export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
+// Pages that link here with ?from=<key>, so "back" returns to them. Whitelisted to avoid arbitrary redirects.
+const BACK_LINKS = {
+  "my-events": { href: "/my-events", label: "event.backToMyEvents" },
+} as const;
+const DEFAULT_BACK_LINK = { href: "/", label: "event.backToEvents" } as const;
+
+export default async function EventDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const { id } = await params;
+  const { from } = await searchParams;
+  const backLink = (typeof from === "string" && BACK_LINKS[from as keyof typeof BACK_LINKS]) || DEFAULT_BACK_LINK;
   const { t, locale } = await getTranslation();
 
   let event: Event;
@@ -45,11 +59,11 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
     <div className="max-w-4xl mx-auto px-6 py-8">
       {/* Back */}
       <Link
-        href="/"
+        href={backLink.href}
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-6 transition-colors"
       >
         <ChevronLeft className="w-4 h-4" />
-        {t("event.backToEvents")}
+        {t(backLink.label)}
       </Link>
 
       {/* Hero */}

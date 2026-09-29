@@ -24,6 +24,12 @@ interface EventCardProps {
   detailed?: boolean;
   // Media card only: note that the event's location is an approximation
   approximateLocation?: boolean;
+  // Compact only: clicking the card selects it (e.g. to highlight its map pin);
+  // only the "+" button opens the event page
+  selected?: boolean;
+  onSelect?: () => void;
+  // Overrides the event page link (e.g. to add ?from=... for the back button)
+  href?: string;
 }
 
 function formatShortDate(date: string): string {
@@ -38,53 +44,85 @@ export default function EventCard({
   compact = false,
   detailed = true,
   approximateLocation = false,
+  selected = false,
+  onSelect,
+  href: hrefOverride,
 }: EventCardProps) {
   const { t } = useTranslation();
   const categoryColor = CATEGORY_COLORS[event.category] ?? "bg-gray-100 text-gray-600";
+  const href = hrefOverride ?? `/events/${event.id}`;
 
   if (compact) {
-    return (
-      <Link href={`/events/${event.id}`}>
-        <div className="bg-white rounded-xl p-4 border border-gray-100 hover:border-orange-200 hover:shadow-md transition-all cursor-pointer group">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${categoryColor}`}>
-                  {t(`categories.${event.category}`)}
-                </span>
-              </div>
-              <h3
-                className="font-semibold text-gray-900 text-sm truncate group-hover:text-primary transition-colors"
-                style={{ ["--tw-text-opacity" as string]: "1" }}
-              >
-                {event.title}
-              </h3>
-              <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                <Clock className="w-3 h-3" />
-                <span>
-                  {event.startTime} – {event.endTime}
-                </span>
-              </div>
-              <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 truncate">
-                <MapPin className="w-3 h-3 shrink-0" />
-                <span className="truncate">{event.venue}</span>
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
-              <span className="text-sm font-bold text-gray-900">
-                {event.price === 0 ? t("common.free") : t("common.price", { price: event.price })}
+    const title = (
+      <h3
+        className="font-semibold text-gray-900 text-sm truncate group-hover:text-primary transition-colors"
+        style={{ ["--tw-text-opacity" as string]: "1" }}
+      >
+        {event.title}
+      </h3>
+    );
+
+    const card = (
+      <div
+        className={`bg-white rounded-xl p-4 border hover:border-orange-200 hover:shadow-md transition-all cursor-pointer group ${
+          selected ? "border-orange-300 bg-orange-50/40" : "border-gray-100"
+        }`}
+        onClick={onSelect}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${categoryColor}`}>
+                {t(`categories.${event.category}`)}
               </span>
+            </div>
+            {onSelect ? (
+              // Keyboard/screen-reader target for selecting; mouse users can click anywhere on the card
+              <button type="button" aria-pressed={selected} className="block w-full text-left min-w-0">
+                {title}
+              </button>
+            ) : (
+              title
+            )}
+            <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+              <Clock className="w-3 h-3" />
+              <span>
+                {event.startTime} – {event.endTime}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 truncate">
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span className="truncate">{event.venue}</span>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <span className="text-sm font-bold text-gray-900">
+              {event.price === 0 ? t("common.free") : t("common.price", { price: event.price })}
+            </span>
+            {onSelect ? (
+              <Link
+                href={href}
+                aria-label={t("common.details")}
+                onClick={(e) => e.stopPropagation()}
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-orange-50 text-primary hover:bg-orange-100 transition-colors"
+                style={{ color: "#ec5b13" }}
+              >
+                <Plus className="w-4 h-4" />
+              </Link>
+            ) : (
               <button
                 className="w-7 h-7 flex items-center justify-center rounded-full bg-orange-50 text-primary hover:bg-orange-100 transition-colors"
                 style={{ color: "#ec5b13" }}
               >
                 <Plus className="w-4 h-4" />
               </button>
-            </div>
+            )}
           </div>
         </div>
-      </Link>
+      </div>
     );
+
+    return onSelect ? card : <Link href={href}>{card}</Link>;
   }
 
   const mediaHeight = detailed ? "h-40" : "h-32";
@@ -94,7 +132,7 @@ export default function EventCard({
 
   return (
     // h-full + flex column: cards in a grid row share the same height, actions pinned to the bottom
-    <Link href={`/events/${event.id}`} className="block h-full no-underline">
+    <Link href={href} className="block h-full no-underline">
       <div className="h-full flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 hover:shadow-lg transition-all cursor-pointer group">
         {/* Media */}
         <div className={`${mediaHeight} shrink-0 relative bg-gradient-to-br from-orange-100 to-orange-200`}>
