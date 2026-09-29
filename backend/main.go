@@ -36,14 +36,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	savedEventsStore, err := store.NewUserSavedEventsStore(database.DB)
+	if err != nil {
+		logger.Error("failed to init user store", "err", err)
+		os.Exit(1)
+	}
+
 	eventsHandler := handlers.NewEventsHandler(eventStore)
 	usersHandler := handlers.NewUsersHandler(userStore)
 	authHandler := handlers.NewAuthHandler(userStore)
+	savedEventsHandler := handlers.NewSavedEventsHandler(savedEventsStore)
 
 	mux := http.NewServeMux()
 	eventsHandler.Register(mux)
 	usersHandler.Register(mux)
 	authHandler.Register(mux)
+	savedEventsHandler.Register(mux)
 
 	// Health check
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

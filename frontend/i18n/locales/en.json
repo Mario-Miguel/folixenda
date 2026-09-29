@@ -5,9 +5,10 @@
   },
   "common": {
     "free": "Free",
-    "price": "${{price}}",
-    "fromPrice": "From ${{price}}",
+    "price": "€{{price}}",
+    "fromPrice": "From €{{price}}",
     "getTickets": "Get tickets",
+    "details": "Details",
     "loading": "Loading…",
     "save": "Save",
     "saving": "Saving…",
@@ -64,6 +65,7 @@
     "sellingFast": "🔥 Selling Fast",
     "registerFree": "Register for free",
     "saveForLater": "Save for later",
+    "saved": "Saved",
     "moreCategoryEvents": "More {{category}} events"
   },
   "admin": {

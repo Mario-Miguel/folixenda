@@ -1,11 +1,15 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Clock, MapPin, Calendar, ChevronLeft, Star, Share2, Bookmark } from "lucide-react";
+import { Clock, MapPin, Calendar, ChevronLeft, Star, Share2 } from "lucide-react";
 import { getEvent, getEvents } from "@/lib/api/events";
 import EventCard from "@/components/EventCard";
 import EventImage from "@/components/EventImage";
 import { formatLongDate } from "@/i18n/format";
 import { getTranslation } from "@/i18n/server";
+import SaveEventButton from "@/components/SaveEventButton";
+import { isEventSaved } from "@/lib/api/userSavedEvents";
+import { ConsumerUser } from "@/data/users";
+import { Event } from "@/lib/types";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Music: "bg-purple-100 text-purple-700",
@@ -21,14 +25,18 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const { t, locale } = await getTranslation();
 
-  let event;
+  let event: Event;
   try {
     event = await getEvent(id);
   } catch {
     notFound();
   }
 
-  const { events: allEvents } = await getEvents({ category: event.category });
+  const [{ events: allEvents }, saved] = await Promise.all([
+    getEvents({ category: event.category }),
+    // A failing saved-events lookup shouldn't break the page; show it as not saved
+    isEventSaved(ConsumerUser.id, event.id).catch(() => false),
+  ]);
   const related = allEvents.filter((e) => e.id !== event.id).slice(0, 3);
 
   const categoryColor = CATEGORY_COLORS[event.category] ?? "bg-gray-100 text-gray-600";
@@ -55,13 +63,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           >
             <Share2 className="w-4 h-4" />
           </button>
-          <button
-            aria-label={t("event.saveForLater")}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/80 backdrop-blur-sm text-gray-600 transition-colors"
-            style={{ color: event.isSaved ? "#ec5b13" : undefined }}
-          >
-            <Bookmark className="w-4 h-4" />
-          </button>
+          <SaveEventButton eventId={event.id} saved={saved} variant="icon" />
         </div>
         <div className="absolute bottom-4 left-4">
           <span className={`text-xs font-semibold px-3 py-1 rounded-full bg-white/90 ${categoryColor}`}>
@@ -172,9 +174,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
               {event.price === 0 ? t("event.registerFree") : t("common.getTickets")}
             </button>
 
-            <button className="w-full py-3 rounded-xl border border-gray-200 text-gray-700 font-medium text-sm mt-3 hover:bg-gray-50 transition-colors">
-              {t("event.saveForLater")}
-            </button>
+            <SaveEventButton eventId={event.id} saved={saved} />
           </div>
         </div>
       </div>

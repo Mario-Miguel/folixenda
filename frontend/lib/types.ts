@@ -35,3 +35,18 @@ export interface User {
   location?: number[];
   eventPreferences?: string[];
 }
+
+export interface SavedEvent extends Event {
+  savedAt: string;
+}
+
+export interface UserSavedEvents {
+  userId: string;
+  savedEvents: SavedEvent[];
+}
+
+export interface UserSavedEvent {
+  id: string;
+  userId: string;
+  eventId: string;
+}

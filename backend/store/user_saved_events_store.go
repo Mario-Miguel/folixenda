@@ -31,8 +31,8 @@ func (s *UserSavedEventStoreDBConnection) migrate() error {
 	_, err := s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS user_saved_events (
 			id                TEXT PRIMARY KEY,
-			id_user           TEXT NOT NULL REFERENCES users(id),
-			id_event          TEXT NOT NULL REFERENCES events(id),
+			user_id           TEXT NOT NULL REFERENCES users(id),
+			event_id          TEXT NOT NULL REFERENCES events(id),
 			created_at		  TIMESTAMP DEFAULT now()
 		)
 	`)
@@ -41,8 +41,8 @@ func (s *UserSavedEventStoreDBConnection) migrate() error {
 
 func (s *UserSavedEventStoreDBConnection) List() ([]*models.UserSavedEvents, error) {
 	rows, err := s.db.Query(`
-		SELECT e.*, se.id_user, se.created_at
-		FROM user_saved_events se INNER JOIN events e ON e.id = se.id_event
+		SELECT e.*, se.user_id, se.created_at
+		FROM user_saved_events se INNER JOIN events e ON e.id = se.event_id
 	`)
 	if err != nil {
 		return nil, err
@@ -70,9 +70,9 @@ func (s *UserSavedEventStoreDBConnection) List() ([]*models.UserSavedEvents, err
 // Get returns the events saved by a user; SavedEvents is empty (never nil) when there are none.
 func (s *UserSavedEventStoreDBConnection) Get(userID string) (*models.UserSavedEvents, error) {
 	rows, err := s.db.Query(`
-		SELECT e.*, se.id_user, se.created_at
-		FROM user_saved_events se INNER JOIN events e ON e.id = se.id_event
-		WHERE se.id_user = $1
+		SELECT e.*, se.user_id, se.created_at
+		FROM user_saved_events se INNER JOIN events e ON e.id = se.event_id
+		WHERE se.user_id = $1
 	`, userID)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func (s *UserSavedEventStoreDBConnection) Get(userID string) (*models.UserSavedE
 
 func (s *UserSavedEventStoreDBConnection) Create(se *models.UserSavedEvent) error {
 	_, err := s.db.Exec(`
-		INSERT INTO user_saved_events (id, id_user, id_event)
+		INSERT INTO user_saved_events (id, user_id, event_id)
 		VALUES ($1,$2,$3)
 	`, se.ID, se.UserId, se.EventId)
 	return err

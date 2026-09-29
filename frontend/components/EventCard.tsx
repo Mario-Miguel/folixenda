@@ -168,7 +168,7 @@ export default function EventCard({
             </span>
           )}
           <span className="-mx-2 rounded px-2 py-1.5 text-[13px] font-semibold uppercase tracking-wide text-primary group-hover:bg-orange-50 transition-colors">
-            {t("common.getTickets")}
+            {t("common.details")}
           </span>
         </div>
       </div>

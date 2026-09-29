@@ -5,9 +5,10 @@
   },
   "common": {
     "free": "Gratis",
-    "price": "{{price}} $",
-    "fromPrice": "Desde {{price}} $",
+    "price": "{{price}} €",
+    "fromPrice": "Desde {{price}} €",
     "getTickets": "Comprar entradas",
+    "details": "Detalles",
     "loading": "Cargando…",
     "save": "Guardar",
     "saving": "Guardando…",
@@ -64,6 +65,7 @@
     "sellingFast": "🔥 Se agotan rápido",
     "registerFree": "Inscríbete gratis",
     "saveForLater": "Guardar para después",
+    "saved": "Guardado",
     "moreCategoryEvents": "Más eventos de {{category}}"
   },
   "admin": {

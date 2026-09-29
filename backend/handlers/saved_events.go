@@ -8,6 +8,7 @@ import (
 
 	"github.com/Mario-Miguel/folixenda/backend/models"
 	"github.com/Mario-Miguel/folixenda/backend/store"
+	"github.com/google/uuid"
 )
 
 type SavedEventsHandler struct {
@@ -19,9 +20,9 @@ func NewSavedEventsHandler(s store.UserSavedEventStore) *SavedEventsHandler {
 }
 
 func (h *SavedEventsHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/{userId}/savedEvents", h.get)
-	mux.HandleFunc("POST /api/{userId}/savedEvents", h.create)
-	mux.HandleFunc("DELETE /api/{userId}/savedEvents/{eventId}", h.delete)
+	mux.HandleFunc("GET /api/user/{userId}/savedEvents", h.get)
+	mux.HandleFunc("POST /api/user/{userId}/savedEvents", h.create)
+	mux.HandleFunc("DELETE /api/user/{userId}/savedEvents/{eventId}", h.delete)
 }
 
 func (h *SavedEventsHandler) get(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +45,10 @@ func (h *SavedEventsHandler) create(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&userSavedEvent); err != nil || userId != userSavedEvent.UserId {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+
+	if userSavedEvent.ID == "" {
+		userSavedEvent.ID = uuid.New().String()
 	}
 
 	if err := h.store.Create(&userSavedEvent); err != nil {
