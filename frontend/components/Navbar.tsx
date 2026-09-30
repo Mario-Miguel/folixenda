@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Search, Bell, Ticket, ShieldAlert } from "lucide-react";
+import { Search, Bell, Ticket, ShieldAlert, User as UserIcon, LogOut } from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { getStoredUser } from "@/lib/auth";
-import type { User } from "@/lib/types";
+import { clearApiToken, signOut, useSession } from "@/lib/better-auth/client";
 
 const NAV_LINKS = [
   { href: "/", label: "nav.discover" },
@@ -18,11 +17,18 @@ const NAV_LINKS = [
 export default function Navbar() {
   const { t } = useTranslation();
   const pathname = usePathname();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const router = useRouter();
+  const { data: session } = useSession();
+  const currentUser = session?.user;
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  useEffect(() => {
-    setCurrentUser(getStoredUser());
-  }, [pathname]);
+  async function handleSignOut() {
+    setMenuOpen(false);
+    await signOut();
+    clearApiToken();
+    router.push("/");
+    router.refresh();
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
@@ -89,11 +95,41 @@ export default function Navbar() {
             <Bell className="w-5 h-5" />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" style={{ backgroundColor: "#ec5b13" }} />
           </button>
-          <div className="w-9 h-9 rounded-full overflow-hidden bg-orange-100 flex items-center justify-center shrink-0">
-            <span className="text-sm font-semibold" style={{ color: "#ec5b13" }}>
-              {currentUser?.name?.[0]?.toUpperCase() ?? "M"}
-            </span>
-          </div>
+          {currentUser ? (
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((open) => !open)}
+                title={currentUser.email}
+                aria-expanded={menuOpen}
+                className="w-9 h-9 rounded-full overflow-hidden bg-orange-100 flex items-center justify-center shrink-0"
+              >
+                <span className="text-sm font-semibold" style={{ color: "#ec5b13" }}>
+                  {currentUser.email[0]?.toUpperCase()}
+                </span>
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl border border-gray-100 shadow-lg py-2">
+                  <p className="px-4 py-2 text-sm text-gray-500 truncate">{currentUser.email}</p>
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    {t("nav.logout")}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              aria-label={t("nav.login")}
+              title={t("nav.login")}
+              className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0 text-gray-500 hover:bg-gray-200 transition-colors"
+            >
+              <UserIcon className="w-5 h-5" />
+            </Link>
+          )}
         </div>
       </div>
     </header>

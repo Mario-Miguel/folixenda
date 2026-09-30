@@ -16,6 +16,15 @@ export const apiClient = axios.create({
   baseURL: `${API_BASE}/api`,
 });
 
+// In the browser, send the Better Auth JWT so the Go API can identify the user
+apiClient.interceptors.request.use(async (config) => {
+  if (typeof window === "undefined") return config;
+  const { getApiToken } = await import("@/lib/better-auth/client");
+  const token = await getApiToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError<{ error?: string }>) => {

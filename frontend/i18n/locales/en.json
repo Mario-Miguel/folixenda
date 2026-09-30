@@ -50,7 +50,9 @@
     "admin": "Admin",
     "search": "Search",
     "notifications": "Notifications",
-    "language": "Language"
+    "language": "Language",
+    "login": "Sign in",
+    "logout": "Sign out"
   },
   "myEvents": {
     "noSavedEvents": "You have no upcoming saved events",
@@ -136,5 +138,31 @@
       "created": "Event created.",
       "createFailed": "Failed to create event."
     }
+  },
+  "login": {
+    "title": "Sign in",
+    "subtitle": "Sign in with your email",
+    "email": "Email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "wrongCredentials": "Wrong email or password.",
+    "genericError": "Something went wrong. Please try again.",
+    "noAccount": "Don't have an account?",
+    "createAccount": "Create account"
+  },
+  "signup": {
+    "title": "Create account",
+    "subtitle": "Sign up to save your favorite events",
+    "name": "Name",
+    "confirmPassword": "Repeat password",
+    "passwordHint": "At least {{min}} characters",
+    "create": "Create account",
+    "creating": "Creating account…",
+    "haveAccount": "Already have an account?",
+    "passwordMismatch": "Passwords don't match.",
+    "passwordTooShort": "Password must be at least {{min}} characters.",
+    "emailTaken": "An account with that email already exists.",
+    "invalidEmail": "The email address is not valid."
   }
 }
