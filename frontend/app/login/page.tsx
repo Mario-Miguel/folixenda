@@ -7,6 +7,11 @@ import { useTranslation } from "react-i18next";
 import { Ticket } from "lucide-react";
 import { signIn } from "@/lib/better-auth/client";
 
+// Only follow same-site paths, so ?redirect= can't send users to another domain
+function safeRedirect(target: string | null): string {
+  return target && /^\/(?![/\\])/.test(target) ? target : "/";
+}
+
 export default function LoginPage() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -25,7 +30,7 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    router.push("/");
+    router.push(safeRedirect(new URLSearchParams(window.location.search).get("redirect")));
     router.refresh();
   }
 

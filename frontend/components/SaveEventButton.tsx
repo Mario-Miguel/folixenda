@@ -1,8 +1,9 @@
 "use client";
 
+import { ApiError } from "@/lib/api/api";
 import { createSavedEvent, deleteSavedEvent } from "@/lib/api/userSavedEvents";
 import { Bookmark } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -16,6 +17,7 @@ interface SaveEventButtonProps {
 export default function SaveEventButton({ eventId, saved, variant = "button" }: SaveEventButtonProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const pathname = usePathname();
   const [saving, setSaving] = useState(false);
   const [refreshing, startTransition] = useTransition();
   const busy = saving || refreshing;
@@ -30,6 +32,13 @@ export default function SaveEventButton({ eventId, saved, variant = "button" }: 
       }
       // Re-render the server page so every save control picks up the new state
       startTransition(() => router.refresh());
+    } catch (err) {
+      // No session (or it expired): log in and come back to this page
+      if (err instanceof ApiError && err.status === 401) {
+        router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+        return;
+      }
+      throw err;
     } finally {
       setSaving(false);
     }

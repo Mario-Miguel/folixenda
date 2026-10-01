@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Bookmark } from "lucide-react";
 import MyEventsView, { EventDay } from "@/components/MyEventsView";
 import { getTranslation } from "@/i18n/server";
@@ -28,11 +29,15 @@ function groupUpcomingByDay(events: SavedEvent[]): EventDay[] {
 }
 
 export default async function MyEventsPage() {
+  // Saved events belong to a user: send anonymous visitors to log in first
+  const token = await getServerApiToken();
+  if (!token) redirect("/login?redirect=/my-events");
+
   const { t } = await getTranslation();
 
   let days: EventDay[] | null = null;
   try {
-    const { savedEvents } = await getSavedEvents(await getServerApiToken());
+    const { savedEvents } = await getSavedEvents(token);
     days = groupUpcomingByDay(savedEvents);
   } catch (err) {
     console.error(err);
