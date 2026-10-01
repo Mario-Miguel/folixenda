@@ -20,12 +20,12 @@ func NewEventsHandler(s store.EventStore) *EventsHandler {
 	return &EventsHandler{store: s}
 }
 
-func (h *EventsHandler) Register(mux *http.ServeMux) {
+func (h *EventsHandler) Register(mux *http.ServeMux, protect func(h http.Handler) http.Handler) {
 	mux.HandleFunc("GET /api/events", h.list)
 	mux.HandleFunc("GET /api/events/{id}", h.get)
-	mux.HandleFunc("POST /api/events", h.create)
-	mux.HandleFunc("PUT /api/events/{id}", h.update)
-	mux.HandleFunc("DELETE /api/events/{id}", h.delete)
+	mux.Handle("POST /api/events", protect(http.HandlerFunc(h.create)))
+	mux.Handle("PUT /api/events/{id}", protect(http.HandlerFunc(h.update)))
+	mux.Handle("DELETE /api/events/{id}", protect(http.HandlerFunc(h.delete)))
 }
 
 type listResponse struct {

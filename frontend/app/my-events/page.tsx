@@ -3,7 +3,7 @@ import { Bookmark } from "lucide-react";
 import MyEventsView, { EventDay } from "@/components/MyEventsView";
 import { getTranslation } from "@/i18n/server";
 import { getSavedEvents } from "@/lib/api/userSavedEvents";
-import { ConsumerUser } from "@/data/users";
+import { getServerApiToken } from "@/lib/better-auth/server-token";
 import { SavedEvent } from "@/lib/types";
 
 // An event counts as past once its end time has gone by (server local time)
@@ -32,7 +32,7 @@ export default async function MyEventsPage() {
 
   let days: EventDay[] | null = null;
   try {
-    const { savedEvents } = await getSavedEvents(ConsumerUser.id);
+    const { savedEvents } = await getSavedEvents(await getServerApiToken());
     days = groupUpcomingByDay(savedEvents);
   } catch (err) {
     console.error(err);

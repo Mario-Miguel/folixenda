@@ -3,9 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/Mario-Miguel/folixenda/backend/models"
 	"github.com/Mario-Miguel/folixenda/backend/store"
@@ -19,12 +17,11 @@ func NewUsersHandler(s store.UserStore) *UsersHandler {
 	return &UsersHandler{store: s}
 }
 
-func (h *UsersHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/users", h.list)
-	mux.HandleFunc("GET /api/users/{id}", h.get)
-	mux.HandleFunc("POST /api/users", h.create)
-	mux.HandleFunc("PUT /api/users/{id}", h.update)
-	mux.HandleFunc("DELETE /api/users/{id}", h.delete)
+func (h *UsersHandler) Register(mux *http.ServeMux, protect func(h http.Handler) http.Handler) {
+	mux.Handle("GET /api/users", protect(http.HandlerFunc(h.list)))
+	mux.Handle("GET /api/users/{id}", protect(http.HandlerFunc(h.get)))
+	mux.Handle("PUT /api/users/{id}", protect(http.HandlerFunc(h.update)))
+	mux.Handle("DELETE /api/users/{id}", protect(http.HandlerFunc(h.delete)))
 }
 
 func (h *UsersHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -53,27 +50,6 @@ func (h *UsersHandler) get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 
-func (h *UsersHandler) create(w http.ResponseWriter, r *http.Request) {
-	var u models.User
-	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	if u.Username == "" || u.Email == "" {
-		writeError(w, http.StatusBadRequest, "username and email are required")
-		return
-	}
-	if u.ID == "" {
-		u.ID = fmt.Sprintf("u%d", time.Now().UnixNano())
-	}
-	if err := h.store.Create(&u); err != nil {
-		writeError(w, http.StatusConflict, "could not create user")
-		return
-	}
-	u.Password = ""
-	writeJSON(w, http.StatusCreated, u)
-}
-
 func (h *UsersHandler) update(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var u models.User
@@ -90,7 +66,6 @@ func (h *UsersHandler) update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to update user")
 		return
 	}
-	u.Password = ""
 	writeJSON(w, http.StatusOK, u)
 }
 

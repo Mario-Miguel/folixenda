@@ -8,7 +8,7 @@ import { formatLongDate } from "@/i18n/format";
 import { getTranslation } from "@/i18n/server";
 import SaveEventButton from "@/components/SaveEventButton";
 import { isEventSaved } from "@/lib/api/userSavedEvents";
-import { ConsumerUser } from "@/data/users";
+import { getServerApiToken } from "@/lib/better-auth/server-token";
 import { Event } from "@/lib/types";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -49,7 +49,9 @@ export default async function EventDetailPage({
   const [{ events: allEvents }, saved] = await Promise.all([
     getEvents({ category: event.category }),
     // A failing saved-events lookup shouldn't break the page; show it as not saved
-    isEventSaved(ConsumerUser.id, event.id).catch(() => false),
+    getServerApiToken()
+      .then((token) => isEventSaved(event.id, token))
+      .catch(() => false),
   ]);
   const related = allEvents.filter((e) => e.id !== event.id).slice(0, 3);
 

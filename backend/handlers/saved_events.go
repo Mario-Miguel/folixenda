@@ -19,15 +19,20 @@ func NewSavedEventsHandler(s store.UserSavedEventStore) *SavedEventsHandler {
 	return &SavedEventsHandler{store: s}
 }
 
-func (h *SavedEventsHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/user/{userId}/savedEvents", h.get)
-	mux.HandleFunc("POST /api/user/{userId}/savedEvents", h.create)
-	mux.HandleFunc("DELETE /api/user/{userId}/savedEvents/{eventId}", h.delete)
+func (h *SavedEventsHandler) Register(mux *http.ServeMux, protect func(h http.Handler) http.Handler) {
+	mux.Handle("GET /api/savedEvents", protect(http.HandlerFunc(h.get)))
+	mux.Handle("POST /api/savedEvents", protect(http.HandlerFunc(h.create)))
+	mux.Handle("DELETE /api/savedEvents/{eventId}", protect(http.HandlerFunc(h.delete)))
 }
 
 func (h *SavedEventsHandler) get(w http.ResponseWriter, r *http.Request) {
-	userId := r.PathValue("userId")
-	savedEvents, err := h.store.Get(userId)
+	claims := GetClaimsFromRequest(w, r)
+
+	if claims == nil || claims.Subject == "" {
+		return
+	}
+
+	savedEvents, err := h.store.Get(claims.Subject)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "saved events not found")
@@ -41,8 +46,13 @@ func (h *SavedEventsHandler) get(w http.ResponseWriter, r *http.Request) {
 
 func (h *SavedEventsHandler) create(w http.ResponseWriter, r *http.Request) {
 	var userSavedEvent models.UserSavedEvent
-	userId := r.PathValue("userId")
-	if err := json.NewDecoder(r.Body).Decode(&userSavedEvent); err != nil || userId != userSavedEvent.UserId {
+	claims := GetClaimsFromRequest(w, r)
+
+	if claims == nil || claims.Subject == "" {
+		return
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&userSavedEvent); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -50,6 +60,8 @@ func (h *SavedEventsHandler) create(w http.ResponseWriter, r *http.Request) {
 	if userSavedEvent.ID == "" {
 		userSavedEvent.ID = uuid.New().String()
 	}
+
+	userSavedEvent.UserId = claims.Subject
 
 	if err := h.store.Create(&userSavedEvent); err != nil {
 		writeError(w, http.StatusConflict, fmt.Sprintf("could not create saved event: %v", err))
@@ -59,9 +71,14 @@ func (h *SavedEventsHandler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SavedEventsHandler) delete(w http.ResponseWriter, r *http.Request) {
-	userId := r.PathValue("userId")
 	eventId := r.PathValue("eventId")
-	if err := h.store.Delete(userId, eventId); err != nil {
+	claims := GetClaimsFromRequest(w, r)
+
+	if claims == nil || claims.Subject == "" {
+		return
+	}
+
+	if err := h.store.Delete(claims.Subject, eventId); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "event not found")
 			return

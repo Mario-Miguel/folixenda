@@ -1,21 +1,24 @@
-import { UserSavedEvents, SavedEvent, UserSavedEvent } from "../types";
+import { UserSavedEvents, SavedEvent } from "../types";
 import { apiClient } from "./api";
 
-export async function getSavedEvents(userId: string): Promise<UserSavedEvents> {
-  const { data } = await apiClient.get<UserSavedEvents>(`/user/${userId}/savedEvents`);
+// Pass a token when calling from the server; in the browser the interceptor adds it
+export async function getSavedEvents(token?: string | null): Promise<UserSavedEvents> {
+  const { data } = await apiClient.get<UserSavedEvents>(`/savedEvents`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
   return data;
 }
 
-export async function createSavedEvent(userId: string, newSavedEvent: Omit<UserSavedEvent, "id">): Promise<SavedEvent> {
-  const { data } = await apiClient.post<SavedEvent>(`/user/${userId}/savedEvents`, newSavedEvent);
+export async function createSavedEvent(eventId: string): Promise<SavedEvent> {
+  const { data } = await apiClient.post<SavedEvent>(`/savedEvents`, { eventId: eventId });
   return data;
 }
 
-export async function deleteSavedEvent(userId: string, eventId: string): Promise<void> {
-  await apiClient.delete(`/user/${userId}/savedEvents/${eventId}`);
+export async function deleteSavedEvent(eventId: string): Promise<void> {
+  await apiClient.delete(`/savedEvents/${eventId}`);
 }
 
-export async function isEventSaved(userId: string, eventId: string): Promise<boolean> {
-  const { savedEvents } = await getSavedEvents(userId);
+export async function isEventSaved(eventId: string, token?: string | null): Promise<boolean> {
+  const { savedEvents } = await getSavedEvents(token);
   return savedEvents.some((e) => e.id === eventId);
 }

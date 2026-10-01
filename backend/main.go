@@ -10,8 +10,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Mario-Miguel/folixenda/backend/auth"
 	"github.com/Mario-Miguel/folixenda/backend/database"
 	"github.com/Mario-Miguel/folixenda/backend/handlers"
+	"github.com/Mario-Miguel/folixenda/backend/middleware"
 	"github.com/Mario-Miguel/folixenda/backend/store"
 )
 
@@ -23,8 +25,8 @@ func main() {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
+	//INIT DB
 	database.Init(".env")
-
 	eventStore, err := store.NewEventStore(database.DB)
 	if err != nil {
 		logger.Error("failed to init event store", "err", err)
@@ -42,16 +44,38 @@ func main() {
 		os.Exit(1)
 	}
 
+	// FINISHED CREATING DB
+
+	// CREATE MIDDLEWARES: AUTH, ETC
+	appCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	verifier, err := auth.NewVerifier(appCtx,
+		os.Getenv("AUTH_JWKS_URL"),
+		os.Getenv("AUTH_ISSUER"),
+		os.Getenv("AUTH_AUDIENCE"),
+	)
+	if err != nil {
+		logger.Error("failed to init token verifier", "err", err)
+		os.Exit(1)
+	}
+
+	authenticate := middleware.Authenticate(verifier)
+	provision := middleware.Provision(userStore)
+
+	// Compone ambos: primero autentica, luego provisiona
+	protect := func(h http.Handler) http.Handler {
+		return authenticate(provision(h))
+	}
+
 	eventsHandler := handlers.NewEventsHandler(eventStore)
 	usersHandler := handlers.NewUsersHandler(userStore)
-	authHandler := handlers.NewAuthHandler(userStore)
 	savedEventsHandler := handlers.NewSavedEventsHandler(savedEventsStore)
 
 	mux := http.NewServeMux()
-	eventsHandler.Register(mux)
-	usersHandler.Register(mux)
-	authHandler.Register(mux)
-	savedEventsHandler.Register(mux)
+	eventsHandler.Register(mux, protect)
+	usersHandler.Register(mux, protect)
+	savedEventsHandler.Register(mux, protect)
 
 	// Health check
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +83,7 @@ func main() {
 		fmt.Fprint(w, "ok")
 	})
 
-	handler := corsMiddleware(loggingMiddleware(logger, mux))
+	handler := middleware.Cors(middleware.Logging(logger, mux))
 
 	srv := &http.Server{
 		Addr:         ":" + port,
@@ -87,24 +111,4 @@ func main() {
 		logger.Error("shutdown error", "err", err)
 	}
 	logger.Info("server stopped")
-}
-
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func loggingMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Info("request", "method", r.Method, "path", r.URL.Path)
-		next.ServeHTTP(w, r)
-	})
 }

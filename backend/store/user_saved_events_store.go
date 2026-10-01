@@ -33,7 +33,8 @@ func (s *UserSavedEventStoreDBConnection) migrate() error {
 			id                TEXT PRIMARY KEY,
 			user_id           TEXT NOT NULL REFERENCES users(id),
 			event_id          TEXT NOT NULL REFERENCES events(id),
-			created_at		  TIMESTAMP DEFAULT now()
+			created_at		  TIMESTAMP DEFAULT now(),
+			UNIQUE (user_id, event_id)
 		)
 	`)
 	return err
@@ -41,7 +42,23 @@ func (s *UserSavedEventStoreDBConnection) migrate() error {
 
 func (s *UserSavedEventStoreDBConnection) List() ([]*models.UserSavedEvents, error) {
 	rows, err := s.db.Query(`
-		SELECT e.*, se.user_id, se.created_at
+		SELECT e.id, 
+			e.title,
+			e.description, 
+			e.category, 
+			e.start_time, 
+			e.end_time, 
+			e.price,
+			e.venue, 
+			e.address,
+			e.image_url, 
+			e.artist_name, 
+			e.perks, 
+			e.is_saved,
+			e.lat,
+			e.lon, 
+			se.user_id, 
+			se.created_at
 		FROM user_saved_events se INNER JOIN events e ON e.id = se.event_id
 	`)
 	if err != nil {
@@ -70,7 +87,23 @@ func (s *UserSavedEventStoreDBConnection) List() ([]*models.UserSavedEvents, err
 // Get returns the events saved by a user; SavedEvents is empty (never nil) when there are none.
 func (s *UserSavedEventStoreDBConnection) Get(userID string) (*models.UserSavedEvents, error) {
 	rows, err := s.db.Query(`
-		SELECT e.*, se.user_id, se.created_at
+		SELECT e.id, 
+			e.title,
+			e.description, 
+			e.category, 
+			e.start_time, 
+			e.end_time, 
+			e.price,
+			e.venue, 
+			e.address,
+			e.image_url, 
+			e.artist_name, 
+			e.perks, 
+			e.is_saved,
+			e.lat,
+			e.lon, 
+			se.user_id, 
+			se.created_at
 		FROM user_saved_events se INNER JOIN events e ON e.id = se.event_id
 		WHERE se.user_id = $1
 	`, userID)

@@ -9,7 +9,7 @@ type SavedEvent struct {
 type UserSavedEvent struct {
 	ID      string `json:"id"`
 	UserId  string `json:"userId"`
-	EventId string `json:"eventID"`
+	EventId string `json:"eventId"`
 }
 
 type UserSavedEvents struct {

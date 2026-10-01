@@ -1,8 +1,6 @@
 "use client";
 
-import { ConsumerUser } from "@/data/users";
 import { createSavedEvent, deleteSavedEvent } from "@/lib/api/userSavedEvents";
-import { UserSavedEvent } from "@/lib/types";
 import { Bookmark } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -26,10 +24,9 @@ export default function SaveEventButton({ eventId, saved, variant = "button" }: 
     setSaving(true);
     try {
       if (saved) {
-        await deleteSavedEvent(ConsumerUser.id, eventId);
+        await deleteSavedEvent(eventId);
       } else {
-        const newSavedEvent: Omit<UserSavedEvent, "id"> = { userId: ConsumerUser.id, eventId };
-        await createSavedEvent(ConsumerUser.id, newSavedEvent);
+        await createSavedEvent(eventId);
       }
       // Re-render the server page so every save control picks up the new state
       startTransition(() => router.refresh());

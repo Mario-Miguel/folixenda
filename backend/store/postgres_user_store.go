@@ -1,21 +1,20 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
 	"github.com/Mario-Miguel/folixenda/backend/models"
 	"github.com/lib/pq"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type UserStore interface {
 	List() ([]*models.User, error)
 	Get(id string) (*models.User, error)
-	Create(u *models.User) error
 	Update(u *models.User) error
 	Delete(id string) error
-	Authenticate(username, password string) (*models.User, error)
+	Upsert(ctx context.Context, u *models.User) error
 }
 
 type UserStoreDBConnection struct {
@@ -34,9 +33,7 @@ func (s *UserStoreDBConnection) migrate() error {
 	_, err := s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS users (
 			id                TEXT PRIMARY KEY,
-			username          TEXT UNIQUE NOT NULL,
 			email             TEXT UNIQUE NOT NULL,
-			password          TEXT NOT NULL,
 			name              TEXT,
 			role              TEXT NOT NULL,
 			subscription_type TEXT,
@@ -50,7 +47,7 @@ func (s *UserStoreDBConnection) migrate() error {
 
 func (s *UserStoreDBConnection) List() ([]*models.User, error) {
 	rows, err := s.db.Query(`
-		SELECT id, username, email, name, role, subscription_type, payment_method, location, event_preferences
+		SELECT id, email, name, role, subscription_type, payment_method, location, event_preferences
 		FROM users
 	`)
 	if err != nil {
@@ -70,7 +67,7 @@ func (s *UserStoreDBConnection) List() ([]*models.User, error) {
 
 func (s *UserStoreDBConnection) Get(id string) (*models.User, error) {
 	row := s.db.QueryRow(`
-		SELECT id, username, email, name, role, subscription_type, payment_method, location, event_preferences
+		SELECT id, email, name, role, subscription_type, payment_method, location, event_preferences
 		FROM users WHERE id=$1
 	`, id)
 	u, err := scanUser(row)
@@ -80,42 +77,14 @@ func (s *UserStoreDBConnection) Get(id string) (*models.User, error) {
 	return u, err
 }
 
-func (s *UserStoreDBConnection) Create(u *models.User) error {
-	if u.Password != "" {
-		hashed, err := hashPassword(u.Password)
-		if err != nil {
-			return err
-		}
-		u.Password = hashed
-	}
-	_, err := s.db.Exec(`
-		INSERT INTO users (id, username, email, name, role, subscription_type, payment_method, location, event_preferences, password)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-	`, u.ID, u.Username, u.Email, u.Name, u.Role, u.SubscriptionType, u.PaymentMethod,
-		pq.Array(u.Location), pq.Array(u.EventPreferences), u.Password)
-	return err
-}
-
 func (s *UserStoreDBConnection) Update(u *models.User) error {
 	var err error
 	var result sql.Result
-	if u.Password != "" {
-		hashed, herr := hashPassword(u.Password)
-		if herr != nil {
-			return herr
-		}
-		result, err = s.db.Exec(`
-			UPDATE users SET username=$2, email=$3, name=$4, role=$5, subscription_type=$6,
-			payment_method=$7, location=$8, event_preferences=$9, password=$10 WHERE id=$1
-		`, u.ID, u.Username, u.Email, u.Name, u.Role, u.SubscriptionType, u.PaymentMethod,
-			pq.Array(u.Location), pq.Array(u.EventPreferences), hashed)
-	} else {
-		result, err = s.db.Exec(`
-			UPDATE users SET username=$2, email=$3, name=$4, role=$5, subscription_type=$6,
-			payment_method=$7, location=$8, event_preferences=$9 WHERE id=$1
-		`, u.ID, u.Username, u.Email, u.Name, u.Role, u.SubscriptionType, u.PaymentMethod,
-			pq.Array(u.Location), pq.Array(u.EventPreferences))
-	}
+	result, err = s.db.Exec(`
+			UPDATE users SET email=$2, name=$3, role=$4, subscription_type=$5,
+			payment_method=$6, location=$7, event_preferences=$8 WHERE id=$1
+		`, u.ID, u.Email, u.Name, u.Role, u.SubscriptionType, u.PaymentMethod,
+		pq.Array(u.Location), pq.Array(u.EventPreferences))
 	if err != nil {
 		return err
 	}
@@ -124,6 +93,19 @@ func (s *UserStoreDBConnection) Update(u *models.User) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (s *UserStoreDBConnection) Upsert(ctx context.Context, u *models.User) error {
+	_, err := s.db.Exec(`
+		INSERT INTO users (id, email, name, role)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (id) DO UPDATE 
+		SET email = EXCLUDED.email,
+			name = EXCLUDED.name,
+			role = EXCLUDED.role
+	`, u.ID, u.Email, u.Name, u.Role)
+
+	return err
 }
 
 func (s *UserStoreDBConnection) Delete(id string) error {
@@ -138,34 +120,11 @@ func (s *UserStoreDBConnection) Delete(id string) error {
 	return nil
 }
 
-func (s *UserStoreDBConnection) Authenticate(username, password string) (*models.User, error) {
-	var hashed string
-	var location pq.Float64Array
-	var prefs pq.StringArray
-	u := &models.User{}
-	err := s.db.QueryRow(`
-		SELECT id, username, email, name, role, subscription_type, payment_method, location, event_preferences, password
-		FROM users WHERE username=$1
-	`, username).Scan(&u.ID, &u.Username, &u.Email, &u.Name, &u.Role, &u.SubscriptionType, &u.PaymentMethod, &location, &prefs, &hashed)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password)); err != nil {
-		return nil, ErrNotFound
-	}
-	u.Location = []float64(location)
-	u.EventPreferences = []string(prefs)
-	return u, nil
-}
-
 func scanUser(s scanner) (*models.User, error) {
 	u := &models.User{}
 	var location pq.Float64Array
 	var prefs pq.StringArray
-	if err := s.Scan(&u.ID, &u.Username, &u.Email, &u.Name, &u.Role, &u.SubscriptionType, &u.PaymentMethod, &location, &prefs); err != nil {
+	if err := s.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.SubscriptionType, &u.PaymentMethod, &location, &prefs); err != nil {
 		return nil, err
 	}
 	u.Location = []float64(location)

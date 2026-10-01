@@ -20,6 +20,11 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Documentación
+
+- [Autenticación](docs/autenticacion.md): Better Auth, login, registro, sesión y JWT para la API de Go.
+- [Eventos y "Mis eventos"](docs/eventos.md): páginas de eventos, calendario, detalle, mapa y eventos guardados.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

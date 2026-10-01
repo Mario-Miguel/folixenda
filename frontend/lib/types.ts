@@ -26,7 +26,6 @@ export interface ApiEventsResponse {
 
 export interface User {
   id: string;
-  username: string;
   email: string;
   name: string;
   role: "admin" | "consumer" | "publisher";
@@ -43,10 +42,4 @@ export interface SavedEvent extends Event {
 export interface UserSavedEvents {
   userId: string;
   savedEvents: SavedEvent[];
-}
-
-export interface UserSavedEvent {
-  id: string;
-  userId: string;
-  eventId: string;
 }
