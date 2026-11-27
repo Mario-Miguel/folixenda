@@ -23,15 +23,7 @@ var (
 	StartDate = time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
 	EndDate   = time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)
 
-	Categories = []models.EventCategory{
-		models.CategoryMusic,
-		models.CategoryTheater,
-		models.CategoryParties,
-		models.CategorySports,
-		models.CategoryFood,
-		models.CategoryArt,
-		models.CategoryWellness,
-	}
+	Categories = models.Categories
 )
 
 // GenerateEvents returns n synthetic events. Categories and days are assigned
@@ -60,7 +52,7 @@ func GenerateEvents(n int, seed int64) []*models.Event {
 			price = 5 + float64(r.Intn(191))*0.5
 		}
 
-		events = append(events, &models.Event{
+		e := &models.Event{
 			ID:          uuid.NewString(),
 			Title:       fmt.Sprintf("Event %04d", seq),
 			Description: fmt.Sprintf("Description %04d", seq),
@@ -73,7 +65,10 @@ func GenerateEvents(n int, seed int64) []*models.Event {
 			Price:       price,
 			Lat:         &lat,
 			Lon:         &lon,
-		})
+		}
+		e.Sessions = []models.EventSession{{Date: e.Date, StartTime: e.StartTime, EndTime: e.EndTime}}
+		e.ApplySessions()
+		events = append(events, e)
 	}
 	return events
 }

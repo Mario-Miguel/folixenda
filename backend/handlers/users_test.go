@@ -15,6 +15,7 @@ func sampleUsers() []*models.User {
 		{ID: consumer.sub, Email: "user@example.com", Name: "User", Role: "consumer",
 			SubscriptionType: "free", EventPreferences: []string{"Music"}},
 		{ID: "user-2", Email: "other@example.com", Name: "Other", Role: "consumer"},
+		{ID: publisher.sub, Email: "org@example.com", Name: "Org", Role: "publisher"},
 	}
 }
 
@@ -36,7 +37,7 @@ func TestUsersList(t *testing.T) {
 		{"unauthenticated", anon, sampleUsers(), nil, 401, 0},
 		{"consumer forbidden", consumer, sampleUsers(), nil, 403, 0},
 		{"publisher forbidden", publisher, sampleUsers(), nil, 403, 0},
-		{"admin lists", admin, sampleUsers(), nil, 200, 3},
+		{"admin lists", admin, sampleUsers(), nil, 200, 4},
 		{"empty is []", admin, nil, nil, 200, 0},
 		{"store error", admin, sampleUsers(), errDB, 500, 0},
 	}
@@ -117,9 +118,18 @@ func TestUsersUpdate(t *testing.T) {
 			body: `{"id":"user-2","email":"hijack@example.com"}`, wantStatus: 200,
 			want: &models.User{ID: consumer.sub, Email: "user@example.com", Name: "User", Role: "consumer",
 				SubscriptionType: "free", EventPreferences: []string{"Music"}}},
-		{name: "admin changes role", who: admin, id: consumer.sub, body: `{"role":"publisher"}`, wantStatus: 200,
-			want: &models.User{ID: consumer.sub, Email: "user@example.com", Name: "User", Role: "publisher",
+		{name: "admin grants admin", who: admin, id: consumer.sub, body: `{"role":"admin"}`, wantStatus: 200,
+			want: &models.User{ID: consumer.sub, Email: "user@example.com", Name: "User", Role: "admin",
 				SubscriptionType: "free", EventPreferences: []string{"Music"}}},
+		{name: "admin keeps same role", who: admin, id: consumer.sub, body: `{"role":"consumer","name":"Same"}`,
+			wantStatus: 200, want: &models.User{ID: consumer.sub, Email: "user@example.com", Name: "Same",
+				Role: "consumer", SubscriptionType: "free", EventPreferences: []string{"Music"}}},
+		{name: "consumer can't become publisher", who: admin, id: consumer.sub, body: `{"role":"publisher"}`,
+			wantStatus: 409},
+		{name: "publisher can't become consumer", who: admin, id: publisher.sub, body: `{"role":"consumer"}`,
+			wantStatus: 409},
+		{name: "publisher promoted to admin", who: admin, id: publisher.sub, body: `{"role":"admin"}`,
+			wantStatus: 200, want: &models.User{ID: publisher.sub, Email: "org@example.com", Name: "Org", Role: "admin"}},
 		{name: "admin replaces preferences", who: admin, id: consumer.sub, body: `{"eventPreferences":["Art","Food"]}`,
 			wantStatus: 200, want: &models.User{ID: consumer.sub, Email: "user@example.com", Name: "User",
 				Role: "consumer", SubscriptionType: "free", EventPreferences: []string{"Art", "Food"}}},

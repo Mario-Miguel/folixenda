@@ -146,6 +146,34 @@ func TestRequireRole(t *testing.T) {
 	}
 }
 
+func TestRequireCanPublish(t *testing.T) {
+	tests := []struct {
+		name       string
+		claims     *auth.Claims
+		wantStatus int
+	}{
+		{"no claims", nil, 401},
+		{"admin allowed", claimsFor("a", auth.RoleAdmin), http.StatusTeapot},
+		{"publisher allowed", claimsFor("p", auth.RolePublisher), http.StatusTeapot},
+		{"consumer forbidden", claimsFor("c", auth.RoleConsumer), 403},
+		{"empty role forbidden", claimsFor("x", ""), 403},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			next := &okHandler{}
+			req := withClaims(httptest.NewRequest(http.MethodPost, "/", nil), tt.claims)
+			rec := httptest.NewRecorder()
+			RequireCanPublish(next).ServeHTTP(rec, req)
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			if next.called != (tt.wantStatus == http.StatusTeapot) {
+				t.Fatalf("next called = %v", next.called)
+			}
+		})
+	}
+}
+
 func TestRequireSelfOrRole(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -9,6 +9,11 @@ import (
 var (
 	ErrNotFound = errors.New("not found")
 	ErrConflict = errors.New("conflict")
+	// ErrGalleryFull: the event already has the maximum of gallery images.
+	ErrGalleryFull = errors.New("gallery is full")
+	// ErrInvalidInput: the request doesn't match the stored data (e.g. a
+	// reorder that doesn't list every gallery image exactly once).
+	ErrInvalidInput = errors.New("invalid input")
 )
 
 // Postgres error codes we translate into store errors.

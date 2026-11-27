@@ -178,3 +178,44 @@ func TestRoles(t *testing.T) {
 		t.Error("nil claims must not be admin")
 	}
 }
+
+func TestAccountTypeChangeAllowed(t *testing.T) {
+	for _, tt := range []struct {
+		from, to string
+		ok       bool
+	}{
+		{RoleConsumer, RolePublisher, false},
+		{RolePublisher, RoleConsumer, false},
+		{RoleConsumer, RoleConsumer, true},
+		{RolePublisher, RolePublisher, true},
+		{RoleConsumer, RoleAdmin, true},
+		{RolePublisher, RoleAdmin, true},
+		{RoleAdmin, RoleConsumer, true},
+		{RoleAdmin, RolePublisher, true},
+	} {
+		if got := AccountTypeChangeAllowed(tt.from, tt.to); got != tt.ok {
+			t.Errorf("AccountTypeChangeAllowed(%q, %q) = %v, want %v", tt.from, tt.to, got, tt.ok)
+		}
+	}
+}
+
+func TestCanPublish(t *testing.T) {
+	for _, tt := range []struct {
+		role string
+		want bool
+	}{
+		{RoleAdmin, true},
+		{RolePublisher, true},
+		{RoleConsumer, false},
+		{"", false},
+		{"Publisher", false},
+		{"root", false},
+	} {
+		if got := CanPublish(&Claims{Role: tt.role}); got != tt.want {
+			t.Errorf("CanPublish(%q) = %v, want %v", tt.role, got, tt.want)
+		}
+	}
+	if CanPublish(nil) {
+		t.Error("nil claims must not publish")
+	}
+}

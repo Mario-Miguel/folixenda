@@ -171,12 +171,27 @@ func TestSavedEventsDelete(t *testing.T) {
 func TestHandlersWithoutClaims(t *testing.T) {
 	sh := NewSavedEventsHandler(seededSavedStore())
 	uh := NewUsersHandler(newFakeUserStore(sampleUsers()...))
+	es := newFakeEventStore(sampleEvents()...)
+	eh := NewEventsHandler(es, &fakeImageStore{events: es}, newFakeObjects())
+	f := newMeFixture()
+	mh := NewMeHandler(f.users, f.profiles, f.prefs, f.events)
 	for name, h := range map[string]http.HandlerFunc{
-		"saved get":    sh.get,
-		"saved check":  sh.isSaved,
-		"saved create": sh.create,
-		"saved delete": sh.delete,
-		"user update":  uh.update,
+		"saved get":        sh.get,
+		"saved check":      sh.isSaved,
+		"saved create":     sh.create,
+		"saved delete":     sh.delete,
+		"user update":      uh.update,
+		"event create":     eh.create,
+		"event update":     eh.update,
+		"event delete":     eh.delete,
+		"image upload":     eh.uploadImage,
+		"image delete":     eh.deleteImage,
+		"image reorder":    eh.reorderImages,
+		"me get":           mh.get,
+		"me notifications": mh.updateNotifications,
+		"me profile get":   mh.getPublisherProfile,
+		"me profile put":   mh.putPublisherProfile,
+		"me events":        mh.listEvents,
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := httptest.NewRecorder()

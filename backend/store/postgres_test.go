@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"reflect"
 	"regexp"
 	"testing"
 	"time"
@@ -35,17 +36,37 @@ func newMock(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
 func q(s string) string { return regexp.QuoteMeta(s) }
 
 var eventCols = []string{"id", "title", "description", "category", "start_time", "end_time", "price",
-	"venue", "address", "image_url", "artist_name", "perks", "is_saved", "lat", "lon"}
+	"venue", "address", "image_url", "artist_name", "perks", "is_saved", "lat", "lon", "publisher_id", "sessions", "images"}
 
 func addEventRow(rows *sqlmock.Rows, id string, extra ...driver.Value) *sqlmock.Rows {
+	return addOwnedEventRow(rows, id, nil, extra...)
+}
+
+// addOwnedEventRow adds an events row whose publisher_id is publisherID (nil = scraped).
+func addOwnedEventRow(rows *sqlmock.Rows, id string, publisherID driver.Value, extra ...driver.Value) *sqlmock.Rows {
 	start := time.Date(2026, 11, 27, 20, 0, 0, 0, time.UTC)
 	vals := []driver.Value{id, "Title " + id, nil, "Music", start, start.Add(2 * time.Hour), 10.0,
-		"Venue", nil, nil, nil, "{a}", false, 43.0, -5.0}
+		"Venue", nil, nil, nil, "{a}", false, 43.0, -5.0, publisherID,
+		[]byte(`[{"date":"2026-11-27","startTime":"20:00","endTime":"22:00"}]`), []byte(`[]`)}
 	return rows.AddRow(append(vals, extra...)...)
 }
 
 func validEvent() *models.Event {
-	return &models.Event{ID: "e1", Title: "T", Category: "Music", Date: "2026-11-27", StartTime: "20:00", EndTime: "22:00"}
+	return &models.Event{ID: "e1", Title: "T", Category: "Music",
+		Sessions: []models.EventSession{{Date: "2026-11-27", StartTime: "20:00", EndTime: "22:00"}}}
+}
+
+var (
+	deleteSessions = q("DELETE FROM event_sessions WHERE event_id=$1")
+	insertSessions = q("INSERT INTO event_sessions (event_id, start_time, end_time)") + `\s+` +
+		q("SELECT $1, t.s, t.e FROM unnest($2::timestamp[], $3::timestamp[]) AS t(s, e)")
+)
+
+// expectSessions expects the delete + insert that replace an event's sessions.
+func expectSessions(m sqlmock.Sqlmock, id string, starts, ends []string) {
+	m.ExpectExec(deleteSessions).WithArgs(id).WillReturnResult(sqlmock.NewResult(0, 1))
+	m.ExpectExec(insertSessions).WithArgs(id, pq.StringArray(starts), pq.StringArray(ends)).
+		WillReturnResult(sqlmock.NewResult(0, int64(len(starts))))
 }
 
 // ---- events ----
@@ -54,14 +75,16 @@ func TestEventStoreList(t *testing.T) {
 	t.Run("filter becomes query args", func(t *testing.T) {
 		db, mock := newMock(t)
 		s := &EventStoreDBConnection{db: db}
-		mock.ExpectQuery(q("WHERE start_time::date >= $1::date AND start_time::date <= $2::date AND category = $3")).
+		mock.ExpectQuery(q("WHERE s.event_id = e.id AND s.start_time >= $1::date AND s.start_time < $2::date + 1) m ON m.first_start IS NOT NULL")+
+			`\s+`+q("WHERE e.category = $3")+`\s+`+q("ORDER BY m.first_start, e.id")).
 			WithArgs("2026-11-01", "2026-11-30", "Music").
 			WillReturnRows(addEventRow(addEventRow(sqlmock.NewRows(eventCols), "e1"), "e2"))
 		got, err := s.List(EventFilter{From: "2026-11-01", To: "2026-11-30", Category: "Music"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(got) != 2 || got[0].ID != "e1" || got[1].ID != "e2" || got[0].Date != "2026-11-27" {
+		if len(got) != 2 || got[0].ID != "e1" || got[1].ID != "e2" || got[0].Date != "2026-11-27" ||
+			len(got[0].Sessions) != 1 || got[0].Images == nil {
 			t.Fatalf("got %+v", got)
 		}
 	})
@@ -89,22 +112,36 @@ func TestEventStoreList(t *testing.T) {
 	})
 }
 
+var getEventCols = append(append([]string{}, eventCols...), "org_name", "website", "phone", "description")
+
 func TestEventStoreGet(t *testing.T) {
+	getQuery := q("FROM events e\n\t\tLEFT JOIN publisher_profiles pp ON pp.user_id = e.publisher_id\n\t\tWHERE e.id=$1")
 	tests := []struct {
-		name    string
-		setup   func(sqlmock.Sqlmock)
-		wantErr error
+		name          string
+		setup         func(sqlmock.Sqlmock)
+		wantErr       error
+		wantPublisher string
+		wantOrganizer *models.Organizer
 	}{
-		{"found", func(m sqlmock.Sqlmock) {
-			m.ExpectQuery(q("FROM events WHERE id=$1")).WithArgs("e1").
-				WillReturnRows(addEventRow(sqlmock.NewRows(eventCols), "e1"))
-		}, nil},
+		{"scraped event: no publisher, no organizer", func(m sqlmock.Sqlmock) {
+			m.ExpectQuery(q("SELECT " + eventColumnsE + ",")).WithArgs("e1").
+				WillReturnRows(addEventRow(sqlmock.NewRows(getEventCols), "e1", nil, nil, nil, nil))
+		}, nil, "", nil},
+		{"publisher event with profile → organizer", func(m sqlmock.Sqlmock) {
+			m.ExpectQuery(getQuery).WithArgs("e1").
+				WillReturnRows(addOwnedEventRow(sqlmock.NewRows(getEventCols), "e1", "pub-1",
+					"Acme", "https://acme.example", nil, "We host"))
+		}, nil, "pub-1", &models.Organizer{ID: "pub-1", OrgName: "Acme", Website: "https://acme.example", Description: "We host"}},
+		{"publisher event without profile → no organizer", func(m sqlmock.Sqlmock) {
+			m.ExpectQuery(getQuery).WithArgs("e1").
+				WillReturnRows(addOwnedEventRow(sqlmock.NewRows(getEventCols), "e1", "pub-1", nil, nil, nil, nil))
+		}, nil, "pub-1", nil},
 		{"not found", func(m sqlmock.Sqlmock) {
-			m.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows(eventCols))
-		}, ErrNotFound},
+			m.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows(getEventCols))
+		}, ErrNotFound, "", nil},
 		{"db error", func(m sqlmock.Sqlmock) {
 			m.ExpectQuery("SELECT").WillReturnError(errDB)
-		}, errDB},
+		}, errDB, "", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -114,15 +151,80 @@ func TestEventStoreGet(t *testing.T) {
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
 			}
-			if tt.wantErr == nil && e.ID != "e1" {
+			if tt.wantErr != nil {
+				if e != nil {
+					t.Fatalf("e = %+v, want nil", e)
+				}
+				return
+			}
+			if e.ID != "e1" || e.PublisherID != tt.wantPublisher {
 				t.Fatalf("e = %+v", e)
+			}
+			if !reflect.DeepEqual(e.Organizer, tt.wantOrganizer) {
+				t.Fatalf("organizer = %+v, want %+v", e.Organizer, tt.wantOrganizer)
 			}
 		})
 	}
 }
 
+func TestEventStoreListByPublisher(t *testing.T) {
+	cols := append(append([]string{}, eventCols...), "count")
+	t.Run("one grouped query with save counts", func(t *testing.T) {
+		db, mock := newMock(t)
+		rows := sqlmock.NewRows(cols)
+		addOwnedEventRow(rows, "e1", "pub-1", int64(3))
+		addOwnedEventRow(rows, "e2", "pub-1", int64(0))
+		mock.ExpectQuery(q("SELECT "+eventColumnsE+", COUNT(se.id)") + `\s+` +
+			q("FROM events e") + `\s+` +
+			q("LEFT JOIN user_saved_events se ON se.event_id = e.id") + `\s+` +
+			q("WHERE e.publisher_id = $1") + `\s+` + q("GROUP BY e.id") + `\s+` + q("ORDER BY e.start_time, e.id")).
+			WithArgs("pub-1").WillReturnRows(rows)
+		got, err := (&EventStoreDBConnection{db: db}).ListByPublisher("pub-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 2 || got[0].ID != "e1" || got[0].SavesCount != 3 || got[1].SavesCount != 0 ||
+			got[0].PublisherID != "pub-1" || got[0].Date != "2026-11-27" {
+			t.Fatalf("got %+v %+v", got[0], got[1])
+		}
+	})
+	t.Run("none is empty slice", func(t *testing.T) {
+		db, mock := newMock(t)
+		mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows(cols))
+		got, err := (&EventStoreDBConnection{db: db}).ListByPublisher("pub-1")
+		if err != nil || got == nil || len(got) != 0 {
+			t.Fatalf("got %v err %v", got, err)
+		}
+	})
+	t.Run("query error", func(t *testing.T) {
+		db, mock := newMock(t)
+		mock.ExpectQuery("SELECT").WillReturnError(errDB)
+		if _, err := (&EventStoreDBConnection{db: db}).ListByPublisher("pub-1"); !errors.Is(err, errDB) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("scan error", func(t *testing.T) {
+		db, mock := newMock(t)
+		mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("e1"))
+		if _, err := (&EventStoreDBConnection{db: db}).ListByPublisher("pub-1"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("row error", func(t *testing.T) {
+		db, mock := newMock(t)
+		rows := addOwnedEventRow(sqlmock.NewRows(cols), "e1", "pub-1", int64(1)).RowError(0, errDB)
+		mock.ExpectQuery("SELECT").WillReturnRows(rows)
+		if _, err := (&EventStoreDBConnection{db: db}).ListByPublisher("pub-1"); !errors.Is(err, errDB) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+}
+
 func TestEventStoreCreate(t *testing.T) {
 	start := time.Date(2026, 11, 27, 20, 0, 0, 0, time.UTC)
+	one := []string{"2026-11-27 20:00:00"}
+	oneEnd := []string{"2026-11-27 22:00:00"}
+	insertEvent := q("INSERT INTO events") + `(.|\n)*` + q("lat, lon, publisher_id)")
 	tests := []struct {
 		name    string
 		event   *models.Event
@@ -130,19 +232,87 @@ func TestEventStoreCreate(t *testing.T) {
 		wantErr error
 		anyErr  bool
 	}{
-		{"ok", validEvent(), func(m sqlmock.Sqlmock) {
-			m.ExpectExec(q("INSERT INTO events")).
+		{"ok, unowned → NULL publisher_id, sessions replaced in the same tx", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectExec(insertEvent).
 				WithArgs("e1", "T", "", models.EventCategory("Music"), start, start.Add(2*time.Hour),
-					"", "", 0.0, "", "", sqlmock.AnyArg(), false, nil, nil).
+					"", "", 0.0, "", "", sqlmock.AnyArg(), false, nil, nil, nil).
 				WillReturnResult(sqlmock.NewResult(0, 1))
+			expectSessions(m, "e1", one, oneEnd)
+			m.ExpectCommit()
 		}, nil, false},
+		{"ok, owned, stored image url, multi-day span", func() *models.Event {
+			e := validEvent()
+			e.PublisherID, e.StoredImageURL = "pub-1", "https://img"
+			e.Sessions = append(e.Sessions, models.EventSession{Date: "2026-11-29", StartTime: "22:00", EndTime: "02:00"})
+			return e
+		}(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectExec(q("INSERT INTO events")).
+				WithArgs("e1", "T", "", models.EventCategory("Music"), start, time.Date(2026, 11, 30, 2, 0, 0, 0, time.UTC),
+					"", "", 0.0, "https://img", "", sqlmock.AnyArg(), false, nil, nil, "pub-1").
+				WillReturnResult(sqlmock.NewResult(0, 1))
+			expectSessions(m, "e1", []string{"2026-11-27 20:00:00", "2026-11-29 22:00:00"},
+				[]string{"2026-11-27 22:00:00", "2026-11-30 02:00:00"})
+			m.ExpectCommit()
+		}, nil, false},
+		{"overnight end is stored on the next day",
+			func() *models.Event {
+				e := validEvent()
+				e.Sessions[0].StartTime, e.Sessions[0].EndTime = "22:00", "02:00"
+				return e
+			}(),
+			func(m sqlmock.Sqlmock) {
+				night := time.Date(2026, 11, 27, 22, 0, 0, 0, time.UTC)
+				m.ExpectBegin()
+				m.ExpectExec(q("INSERT INTO events")).
+					WithArgs("e1", "T", "", models.EventCategory("Music"), night, night.Add(4*time.Hour),
+						"", "", 0.0, "", "", sqlmock.AnyArg(), false, nil, nil, nil).
+					WillReturnResult(sqlmock.NewResult(0, 1))
+				expectSessions(m, "e1", []string{"2026-11-27 22:00:00"}, []string{"2026-11-28 02:00:00"})
+				m.ExpectCommit()
+			}, nil, false},
+		{"unknown publisher", func() *models.Event { e := validEvent(); e.PublisherID = "nobody"; return e }(),
+			func(m sqlmock.Sqlmock) {
+				m.ExpectBegin()
+				m.ExpectExec("INSERT").WillReturnError(&pq.Error{Code: "23503"})
+				m.ExpectRollback()
+			}, ErrNotFound, false},
 		{"duplicate", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
 			m.ExpectExec("INSERT").WillReturnError(&pq.Error{Code: "23505"})
+			m.ExpectRollback()
 		}, ErrConflict, false},
 		{"db error", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
 			m.ExpectExec("INSERT").WillReturnError(errDB)
+			m.ExpectRollback()
 		}, errDB, false},
-		{"bad timestamps never hit the db", &models.Event{ID: "x", Date: "nope"}, func(sqlmock.Sqlmock) {}, nil, true},
+		{"begin error", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin().WillReturnError(errDB)
+		}, errDB, false},
+		{"delete sessions error → rollback", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectExec("INSERT").WillReturnResult(sqlmock.NewResult(0, 1))
+			m.ExpectExec(deleteSessions).WillReturnError(errDB)
+			m.ExpectRollback()
+		}, errDB, false},
+		{"insert sessions error → rollback", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectExec("INSERT").WillReturnResult(sqlmock.NewResult(0, 1))
+			m.ExpectExec(deleteSessions).WillReturnResult(sqlmock.NewResult(0, 1))
+			m.ExpectExec(insertSessions).WillReturnError(errDB)
+			m.ExpectRollback()
+		}, errDB, false},
+		{"commit error", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectExec("INSERT").WillReturnResult(sqlmock.NewResult(0, 1))
+			expectSessions(m, "e1", one, oneEnd)
+			m.ExpectCommit().WillReturnError(errDB)
+		}, errDB, false},
+		{"bad sessions never hit the db", &models.Event{ID: "x", Sessions: []models.EventSession{{Date: "nope"}}},
+			func(sqlmock.Sqlmock) {}, nil, true},
+		{"no sessions never hit the db", &models.Event{ID: "x"}, func(sqlmock.Sqlmock) {}, nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -162,44 +332,52 @@ func TestEventStoreCreate(t *testing.T) {
 	}
 }
 
-func TestEventStoreUpdateDelete(t *testing.T) {
-	type op func(*EventStoreDBConnection) error
-	update := func(s *EventStoreDBConnection) error { return s.Update(validEvent()) }
-	del := func(s *EventStoreDBConnection) error { return s.Delete("e1") }
+func TestEventStoreUpdate(t *testing.T) {
+	start := time.Date(2026, 11, 27, 20, 0, 0, 0, time.UTC)
+	updateSQL := q("UPDATE events SET") + `(.|\n)*` + q("lat=$14, lon=$15, updated_at=now()") + `\s+` + q("WHERE id=$1")
 	tests := []struct {
 		name    string
-		op      op
+		event   *models.Event
 		setup   func(sqlmock.Sqlmock)
 		wantErr error
 		anyErr  bool
 	}{
-		{"update ok", update, func(m sqlmock.Sqlmock) {
-			m.ExpectExec(q("UPDATE events SET")).WillReturnResult(sqlmock.NewResult(0, 1))
+		{"ok: bumps updated_at, never touches publisher_id, replaces sessions", func() *models.Event {
+			e := validEvent()
+			e.PublisherID = "intruder"
+			return e
+		}(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectExec(updateSQL).
+				WithArgs("e1", "T", "", models.EventCategory("Music"), start, start.Add(2*time.Hour),
+					"", "", 0.0, "", "", sqlmock.AnyArg(), false, nil, nil).
+				WillReturnResult(sqlmock.NewResult(0, 1))
+			expectSessions(m, "e1", []string{"2026-11-27 20:00:00"}, []string{"2026-11-27 22:00:00"})
+			m.ExpectCommit()
 		}, nil, false},
-		{"update missing", update, func(m sqlmock.Sqlmock) {
+		{"missing", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
 			m.ExpectExec("UPDATE").WillReturnResult(sqlmock.NewResult(0, 0))
+			m.ExpectRollback()
 		}, ErrNotFound, false},
-		{"update db error", update, func(m sqlmock.Sqlmock) {
+		{"db error", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
 			m.ExpectExec("UPDATE").WillReturnError(errDB)
+			m.ExpectRollback()
 		}, errDB, false},
-		{"update bad timestamps", func(s *EventStoreDBConnection) error {
-			return s.Update(&models.Event{ID: "e1"})
-		}, func(sqlmock.Sqlmock) {}, nil, true},
-		{"delete ok", del, func(m sqlmock.Sqlmock) {
-			m.ExpectExec(q("DELETE FROM events WHERE id=$1")).WithArgs("e1").WillReturnResult(sqlmock.NewResult(0, 1))
-		}, nil, false},
-		{"delete missing", del, func(m sqlmock.Sqlmock) {
-			m.ExpectExec("DELETE").WillReturnResult(sqlmock.NewResult(0, 0))
-		}, ErrNotFound, false},
-		{"delete db error", del, func(m sqlmock.Sqlmock) {
-			m.ExpectExec("DELETE").WillReturnError(errDB)
+		{"sessions error → rollback", validEvent(), func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectExec("UPDATE").WillReturnResult(sqlmock.NewResult(0, 1))
+			m.ExpectExec(deleteSessions).WillReturnError(errDB)
+			m.ExpectRollback()
 		}, errDB, false},
+		{"bad sessions", &models.Event{ID: "e1"}, func(sqlmock.Sqlmock) {}, nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, mock := newMock(t)
 			tt.setup(mock)
-			err := tt.op(&EventStoreDBConnection{db: db})
+			err := (&EventStoreDBConnection{db: db}).Update(tt.event)
 			if tt.anyErr {
 				if err == nil {
 					t.Fatal("expected error")
@@ -208,6 +386,69 @@ func TestEventStoreUpdateDelete(t *testing.T) {
 			}
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestEventStoreDelete(t *testing.T) {
+	lock := q("SELECT id FROM events WHERE id=$1 FOR UPDATE")
+	keys := q("SELECT COALESCE(array_agg(object_key), '{}') FROM event_images WHERE event_id=$1")
+	del := q("DELETE FROM events WHERE id=$1")
+	tests := []struct {
+		name     string
+		setup    func(sqlmock.Sqlmock)
+		wantKeys []string
+		wantErr  error
+	}{
+		{"ok returns the image keys", func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectQuery(lock).WithArgs("e1").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("e1"))
+			m.ExpectQuery(keys).WithArgs("e1").WillReturnRows(sqlmock.NewRows([]string{"k"}).AddRow("{a,b}"))
+			m.ExpectExec(del).WithArgs("e1").WillReturnResult(sqlmock.NewResult(0, 1))
+			m.ExpectCommit()
+		}, []string{"a", "b"}, nil},
+		{"missing", func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectQuery(lock).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+			m.ExpectRollback()
+		}, nil, ErrNotFound},
+		{"lock error", func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectQuery(lock).WillReturnError(errDB)
+			m.ExpectRollback()
+		}, nil, errDB},
+		{"keys error", func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectQuery(lock).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("e1"))
+			m.ExpectQuery(keys).WillReturnError(errDB)
+			m.ExpectRollback()
+		}, nil, errDB},
+		{"delete error", func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectQuery(lock).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("e1"))
+			m.ExpectQuery(keys).WillReturnRows(sqlmock.NewRows([]string{"k"}).AddRow("{}"))
+			m.ExpectExec(del).WillReturnError(errDB)
+			m.ExpectRollback()
+		}, nil, errDB},
+		{"commit error", func(m sqlmock.Sqlmock) {
+			m.ExpectBegin()
+			m.ExpectQuery(lock).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow("e1"))
+			m.ExpectQuery(keys).WillReturnRows(sqlmock.NewRows([]string{"k"}).AddRow("{}"))
+			m.ExpectExec(del).WillReturnResult(sqlmock.NewResult(0, 1))
+			m.ExpectCommit().WillReturnError(errDB)
+		}, nil, errDB},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock := newMock(t)
+			tt.setup(mock)
+			got, err := (&EventStoreDBConnection{db: db}).Delete("e1")
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(got, tt.wantKeys) {
+				t.Fatalf("keys = %v, want %v", got, tt.wantKeys)
 			}
 		})
 	}

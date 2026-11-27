@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/Mario-Miguel/folixenda/backend/auth"
 	"github.com/Mario-Miguel/folixenda/backend/models"
+	"github.com/Mario-Miguel/folixenda/backend/storage"
 	"github.com/Mario-Miguel/folixenda/backend/store"
 )
 
@@ -49,6 +52,10 @@ var (
 	consumer  = identity{"user-1", auth.RoleConsumer}
 )
 
+func claimsOf(who identity) *auth.Claims {
+	return &auth.Claims{Role: who.role, RegisteredClaims: jwt.RegisteredClaims{Subject: who.sub}}
+}
+
 func do(t *testing.T, h http.Handler, method, target, body string, who identity) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, target, strings.NewReader(body))
@@ -76,10 +83,17 @@ type fakeEventStore struct {
 	mu     sync.Mutex
 	events map[string]*models.Event
 	err    error // returned by every method when set
-	// createErr overrides err for Create only.
+	// createErr, updateErr and deleteErr override err for that method only.
 	createErr  error
+	updateErr  error
+	deleteErr  error
 	lastFilter store.EventFilter
 	created    []*models.Event
+	// saves is the savesCount reported by ListByPublisher per event id.
+	saves         map[string]int
+	lastPublisher string
+	deleted       []string
+	getsLeft      int // when > 0, Get fails after this many more calls
 }
 
 func newFakeEventStore(events ...*models.Event) *fakeEventStore {
@@ -99,13 +113,16 @@ func (f *fakeEventStore) List(filter store.EventFilter) ([]*models.Event, error)
 	}
 	var out []*models.Event
 	for _, e := range f.events {
-		if filter.Date != "" && e.Date != filter.Date ||
-			filter.From != "" && e.Date < filter.From ||
-			filter.To != "" && e.Date > filter.To ||
-			filter.Category != "" && string(e.Category) != filter.Category {
+		if filter.Category != "" && string(e.Category) != filter.Category {
 			continue
 		}
-		out = append(out, e)
+		// Like the real store: any session starting on Date / within [From, To].
+		if slices.ContainsFunc(e.Sessions, func(s models.EventSession) bool {
+			return (filter.Date == "" || s.Date == filter.Date) &&
+				(filter.From == "" || s.Date >= filter.From) && (filter.To == "" || s.Date <= filter.To)
+		}) {
+			out = append(out, e)
+		}
 	}
 	slices.SortFunc(out, func(a, b *models.Event) int { return strings.Compare(a.ID, b.ID) })
 	return out, nil
@@ -116,6 +133,12 @@ func (f *fakeEventStore) Get(id string) (*models.Event, error) {
 	defer f.mu.Unlock()
 	if f.err != nil {
 		return nil, f.err
+	}
+	if f.getsLeft > 0 {
+		f.getsLeft--
+		if f.getsLeft == 0 {
+			return nil, errDB
+		}
 	}
 	e, ok := f.events[id]
 	if !ok {
@@ -136,6 +159,8 @@ func (f *fakeEventStore) Create(e *models.Event) error {
 	if _, ok := f.events[e.ID]; ok {
 		return store.ErrConflict
 	}
+	e.Images = []models.EventImage{} // like the DB: a new event has no images
+	e.ApplyImages()
 	f.events[e.ID] = e
 	f.created = append(f.created, e)
 	return nil
@@ -144,27 +169,65 @@ func (f *fakeEventStore) Create(e *models.Event) error {
 func (f *fakeEventStore) Update(e *models.Event) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.updateErr != nil {
+		return f.updateErr
+	}
 	if f.err != nil {
 		return f.err
 	}
-	if _, ok := f.events[e.ID]; !ok {
+	old, ok := f.events[e.ID]
+	if !ok {
 		return store.ErrNotFound
 	}
+	e.Images = old.Images // like the DB: images live in their own table
+	e.ApplyImages()
 	f.events[e.ID] = e
 	return nil
 }
 
-func (f *fakeEventStore) Delete(id string) error {
+func (f *fakeEventStore) Delete(id string) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.err != nil {
-		return f.err
+	if f.deleteErr != nil {
+		return nil, f.deleteErr
 	}
-	if _, ok := f.events[id]; !ok {
-		return store.ErrNotFound
+	if f.err != nil {
+		return nil, f.err
+	}
+	e, ok := f.events[id]
+	if !ok {
+		return nil, store.ErrNotFound
+	}
+	var keys []string
+	for _, img := range e.Images {
+		keys = append(keys, img.ObjectKey)
 	}
 	delete(f.events, id)
-	return nil
+	f.deleted = append(f.deleted, id)
+	return keys, nil
+}
+
+// failGetsAfter makes the n-th next Get fail (n > 0), to test the reload
+// after a write.
+func (f *fakeEventStore) failGetsAfter(n int) { f.getsLeft = n }
+
+func (f *fakeEventStore) ListByPublisher(publisherID string) ([]*models.PublisherEvent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastPublisher = publisherID
+	if f.err != nil {
+		return nil, f.err
+	}
+	var out []*models.PublisherEvent
+	for _, e := range f.events {
+		if e.PublisherID == publisherID {
+			out = append(out, &models.PublisherEvent{Event: *e, SavesCount: f.saves[e.ID]})
+		}
+	}
+	slices.SortFunc(out, func(a, b *models.PublisherEvent) int {
+		return strings.Compare(a.Date+a.StartTime, b.Date+b.StartTime)
+	})
+	return out, nil
 }
 
 // ---- users ----
@@ -333,9 +396,246 @@ func (f *fakeSavedStore) IsSaved(userID, eventID string) (bool, error) {
 	return f.saved[savedKey{userID, eventID}], nil
 }
 
+// ---- publisher profiles ----
+
+type fakeProfileStore struct {
+	mu        sync.Mutex
+	profiles  map[string]*models.PublisherProfile
+	err       error // every method
+	upsertErr error // Upsert only
+	upserted  []models.PublisherProfile
+}
+
+func newFakeProfileStore(profiles ...*models.PublisherProfile) *fakeProfileStore {
+	f := &fakeProfileStore{profiles: map[string]*models.PublisherProfile{}}
+	for _, p := range profiles {
+		f.profiles[p.UserID] = p
+	}
+	return f
+}
+
+func (f *fakeProfileStore) Get(userID string) (*models.PublisherProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	p, ok := f.profiles[userID]
+	if !ok {
+		return nil, store.ErrNotFound
+	}
+	cp := *p
+	return &cp, nil
+}
+
+func (f *fakeProfileStore) Upsert(p *models.PublisherProfile) (*models.PublisherProfile, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.upsertErr != nil {
+		return nil, f.upsertErr
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *p
+	cp.CreatedAt, cp.UpdatedAt = "2026-11-27T10:00:00Z", "2026-11-27T11:00:00Z"
+	if old, ok := f.profiles[p.UserID]; ok {
+		cp.CreatedAt = old.CreatedAt
+	}
+	f.profiles[p.UserID] = &cp
+	f.upserted = append(f.upserted, cp)
+	out := cp
+	return &out, nil
+}
+
+// ---- notification preferences ----
+
+type fakePrefsStore struct {
+	mu        sync.Mutex
+	prefs     map[string]*models.NotificationPreferences
+	err       error // every method
+	upsertErr error // Upsert only
+	upserted  []models.NotificationPreferences
+}
+
+func newFakePrefsStore() *fakePrefsStore {
+	return &fakePrefsStore{prefs: map[string]*models.NotificationPreferences{}}
+}
+
+func (f *fakePrefsStore) Get(userID string) (*models.NotificationPreferences, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	p, ok := f.prefs[userID]
+	if !ok {
+		return nil, store.ErrNotFound
+	}
+	cp := *p
+	return &cp, nil
+}
+
+func (f *fakePrefsStore) Upsert(userID string, p *models.NotificationPreferences) (*models.NotificationPreferences, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.upsertErr != nil {
+		return nil, f.upsertErr
+	}
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *p
+	f.prefs[userID] = &cp
+	f.upserted = append(f.upserted, cp)
+	out := cp
+	return &out, nil
+}
+
+// ---- event images + object storage ----
+
+// fakeImageStore keeps images on the fakeEventStore's events, so Get sees them.
+type fakeImageStore struct {
+	events *fakeEventStore
+	err    error
+}
+
+func (f *fakeImageStore) AddImage(img *models.EventImage, maxGallery int) (*models.EventImage, error) {
+	f.events.mu.Lock()
+	defer f.events.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	e, ok := f.events.events[img.EventID]
+	if !ok {
+		return nil, store.ErrNotFound
+	}
+	var replaced *models.EventImage
+	if img.Kind == models.ImageKindCover {
+		for i, old := range e.Images {
+			if old.Kind == models.ImageKindCover {
+				cp := old
+				replaced = &cp
+				e.Images = slices.Delete(e.Images, i, i+1)
+				break
+			}
+		}
+	} else {
+		n := 0
+		for _, old := range e.Images {
+			if old.Kind == models.ImageKindGallery {
+				n++
+			}
+		}
+		if n >= maxGallery {
+			return nil, store.ErrGalleryFull
+		}
+		img.Position = n
+	}
+	img.URL = "http://cdn/" + img.ObjectKey
+	e.Images = append(e.Images, *img)
+	e.ApplyImages()
+	return replaced, nil
+}
+
+func (f *fakeImageStore) DeleteImage(eventID, imageID string) (*models.EventImage, error) {
+	f.events.mu.Lock()
+	defer f.events.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	e := f.events.events[eventID]
+	for i, img := range e.Images {
+		if img.ID == imageID {
+			e.Images = slices.Delete(e.Images, i, i+1)
+			e.ApplyImages()
+			return &img, nil
+		}
+	}
+	return nil, store.ErrNotFound
+}
+
+func (f *fakeImageStore) ReorderImages(eventID string, ids []string) ([]models.EventImage, error) {
+	f.events.mu.Lock()
+	defer f.events.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	e := f.events.events[eventID]
+	var gallery []string
+	for _, img := range e.Images {
+		if img.Kind == models.ImageKindGallery {
+			gallery = append(gallery, img.ID)
+		}
+	}
+	a, b := slices.Clone(gallery), slices.Clone(ids)
+	slices.Sort(a)
+	slices.Sort(b)
+	if !slices.Equal(a, b) {
+		return nil, store.ErrInvalidInput
+	}
+	for i := range e.Images {
+		if p := slices.Index(ids, e.Images[i].ID); p >= 0 {
+			e.Images[i].Position = p
+		}
+	}
+	return slices.Clone(e.Images), nil
+}
+
+// fakeObjects is an in-memory storage.Storage.
+type fakeObjects struct {
+	mu        sync.Mutex
+	objects   map[string][]byte
+	types     map[string]string
+	putErr    error
+	deleteErr error
+	deleted   []string
+}
+
+func newFakeObjects() *fakeObjects {
+	return &fakeObjects{objects: map[string][]byte{}, types: map[string]string{}}
+}
+
+func (f *fakeObjects) Put(_ context.Context, key string, r io.Reader, size int64, contentType string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.putErr != nil {
+		return f.putErr
+	}
+	b, err := io.ReadAll(r)
+	if err != nil || int64(len(b)) != size {
+		return errors.New("size mismatch")
+	}
+	f.objects[key], f.types[key] = b, contentType
+	return nil
+}
+
+func (f *fakeObjects) Delete(_ context.Context, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleted = append(f.deleted, key)
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	delete(f.objects, key)
+	return nil
+}
+
+func (f *fakeObjects) URL(key string) string { return "http://cdn/" + key }
+
+func (f *fakeObjects) keys() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Sorted(maps.Keys(f.objects))
+}
+
 // Compile-time checks that the fakes satisfy the store interfaces.
 var (
-	_ store.EventStore          = (*fakeEventStore)(nil)
-	_ store.UserStore           = (*fakeUserStore)(nil)
-	_ store.UserSavedEventStore = (*fakeSavedStore)(nil)
+	_ store.EventStore                   = (*fakeEventStore)(nil)
+	_ store.EventImageStore              = (*fakeImageStore)(nil)
+	_ storage.Storage                    = (*fakeObjects)(nil)
+	_ store.UserStore                    = (*fakeUserStore)(nil)
+	_ store.UserSavedEventStore          = (*fakeSavedStore)(nil)
+	_ store.PublisherProfileStore        = (*fakeProfileStore)(nil)
+	_ store.NotificationPreferencesStore = (*fakePrefsStore)(nil)
 )
