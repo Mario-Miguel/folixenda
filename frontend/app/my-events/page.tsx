@@ -6,22 +6,25 @@ import { getTranslation } from "@/i18n/server";
 import { getSavedEvents } from "@/lib/api/userSavedEvents";
 import { getServerApiToken } from "@/lib/better-auth/server-token";
 import { SavedEvent } from "@/lib/types";
-import { hasEventEnded } from "@/lib/dates";
+import { compareSessions, nextSession } from "@/lib/dates";
 
-// Upcoming events sorted by date and start time, grouped by day
+// Upcoming events grouped by the day of their next session (the one in progress, or the next to
+// start), sorted by that session's start. A multi-day event stays upcoming until its last session
+// ends; events whose last session has ended are left out.
 function groupUpcomingByDay(events: SavedEvent[]): EventDay[] {
   // Event times are Spanish wall-clock times, so compare against "now" in Europe/Madrid:
   // correct whatever time zone the server runs in
   const now = new Date();
   const upcoming = events
-    .filter((e) => !hasEventEnded(e, now))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+    .map((event) => ({ event, session: nextSession(event, now) }))
+    .filter((x): x is { event: SavedEvent; session: NonNullable<typeof x.session> } => !!x.session)
+    .sort((a, b) => compareSessions(a.session, b.session));
 
   const days: EventDay[] = [];
-  for (const event of upcoming) {
+  for (const { event, session } of upcoming) {
     const last = days.at(-1);
-    if (last?.date === event.date) last.events.push(event);
-    else days.push({ date: event.date, events: [event] });
+    if (last?.date === session.date) last.events.push(event);
+    else days.push({ date: session.date, events: [event] });
   }
   return days;
 }
