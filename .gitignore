@@ -33,5 +33,6 @@ go.work.sum
 
 db_queries/
 backend/tmp/
+backend/uploads/
 
 .env

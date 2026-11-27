@@ -46,3 +46,20 @@ func RequireSelfOrRole(param string, roles ...string) func(http.Handler) http.Ha
 		})
 	}
 }
+
+// RequireCanPublish only lets through requests whose claims may publish events,
+// as decided by auth.CanPublish. No claims → 401, not allowed → 403.
+func RequireCanPublish(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := auth.UserFrom(r.Context())
+		if !ok || claims == nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !auth.CanPublish(claims) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

@@ -61,6 +61,8 @@ interface EventsMapProps {
   markers?: MapMarker[];
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  // Day being shown ("YYYY-MM-DD"): cards show that day's session instead of the overall dates
+  day?: string;
 }
 
 function FlyToSelected({ marker }: { marker?: MapMarker }) {
@@ -73,7 +75,7 @@ function FlyToSelected({ marker }: { marker?: MapMarker }) {
   return null;
 }
 
-export default function EventsMap({ markers = [], selectedId = null, onSelect }: EventsMapProps) {
+export default function EventsMap({ markers = [], selectedId = null, onSelect, day }: EventsMapProps) {
   const selected = markers.find((m) => m.id === selectedId);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const hovered = markers.find((m) => m.id === hoveredId);
@@ -113,7 +115,7 @@ export default function EventsMap({ markers = [], selectedId = null, onSelect }:
       eventHandlers={isSelected ? undefined : { remove: () => setHoveredId((cur) => (cur === m.id ? null : cur)) }}
     >
       <div className="w-60" onMouseEnter={cancelClose} onMouseLeave={scheduleClose}>
-        <EventCard event={m.event} detailed={false} approximateLocation={!m.precise} />
+        <EventCard event={m.event} detailed={false} approximateLocation={!m.precise} day={day} />
       </div>
     </Popup>
   );

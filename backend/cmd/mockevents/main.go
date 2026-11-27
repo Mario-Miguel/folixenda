@@ -27,7 +27,7 @@ func main() {
 
 	if *toDB {
 		database.Init(".env")
-		s := store.NewEventStore(database.DB)
+		s := store.NewEventStore(database.DB, nil)
 		inserted := 0
 		for _, e := range events {
 			if err := s.Create(e); err != nil {

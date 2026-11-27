@@ -11,8 +11,9 @@ import SwitchMapWidget from "@/components/SwitchMapWidget";
 import CompactEventList from "@/components/CompactEventList";
 import LoadError from "@/components/LoadError";
 import { formatLongDate } from "@/i18n/format";
-import { monthRange, startOfMonth, toISODateStr } from "@/lib/dates";
+import { eventSessions, monthRange, sessionOn, startOfMonth, toISODateStr } from "@/lib/dates";
 import { useEvents } from "@/lib/hooks/useEvents";
+import type { Event } from "@/lib/types";
 
 export default function HomePage() {
   const { t, i18n } = useTranslation();
@@ -23,12 +24,22 @@ export default function HomePage() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   // Events of the selected day, filtered by the API
-  const day = useEvents({ date: toISODateStr(selectedDate), category: selectedCategory });
+  // (the API returns every event with a session on that day, multi-day events included)
+  const selectedDay = toISODateStr(selectedDate);
+  const day = useEvents({ date: selectedDay, category: selectedCategory });
   // Events of the month shown in the mini calendar, only to mark the days that have events
   const month = useEvents({ ...monthRange(calendarMonth), category: selectedCategory });
 
-  const eventDates = useMemo(() => new Set(month.events.map((e) => e.date)), [month.events]);
-  const dayEvents = day.events;
+  // A multi-day event marks every one of its session days
+  const eventDates = useMemo(
+    () => new Set(month.events.flatMap((e) => eventSessions(e).map((s) => s.date))),
+    [month.events],
+  );
+  // Sorted by the start time of their session on the selected day
+  const dayEvents = useMemo(() => {
+    const startOn = (e: Event) => sessionOn(e, selectedDay)?.startTime ?? e.startTime;
+    return [...day.events].sort((a, b) => startOn(a).localeCompare(startOn(b)));
+  }, [day.events, selectedDay]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -51,7 +62,12 @@ export default function HomePage() {
           {/* Map / Calendar toggle */}
           <SwitchMapWidget setShowMap={setShowMap} showMap={showMap} />
           {showMap && !day.loading && !day.error && (
-            <CompactEventList events={dayEvents} selectedEventId={selectedEventId} onSelect={setSelectedEventId} />
+            <CompactEventList
+              events={dayEvents}
+              selectedEventId={selectedEventId}
+              onSelect={setSelectedEventId}
+              day={selectedDay}
+            />
           )}
         </aside>
 
@@ -74,6 +90,7 @@ export default function HomePage() {
                 selectedEventId={selectedEventId}
                 onSelectEvent={setSelectedEventId}
                 className="h-[32rem]"
+                day={selectedDay}
               />
             </div>
           )}
@@ -91,7 +108,7 @@ export default function HomePage() {
           ) : (
             <div className={`flex flex-col gap-3 ${showMap ? "lg:hidden" : ""}`}>
               {dayEvents.map((event) => (
-                <EventCard key={event.id} event={event} compact />
+                <EventCard key={event.id} event={event} compact day={selectedDay} />
               ))}
             </div>
           )}
@@ -99,7 +116,12 @@ export default function HomePage() {
           {/* Mobile map */}
           <div className="mt-8 lg:hidden">
             <h3 className="font-semibold text-gray-900 mb-3">{t("common.eventsMap")}</h3>
-            <MapView events={dayEvents} selectedEventId={selectedEventId} onSelectEvent={setSelectedEventId} />
+            <MapView
+              events={dayEvents}
+              selectedEventId={selectedEventId}
+              onSelectEvent={setSelectedEventId}
+              day={selectedDay}
+            />
           </div>
         </section>
       </div>

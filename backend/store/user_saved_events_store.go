@@ -17,33 +17,21 @@ type UserSavedEventStore interface {
 }
 
 type UserSavedEventStoreDBConnection struct {
-	db *sql.DB
+	db       *sql.DB
+	imageURL URLFunc
 }
 
-// NewUserSavedEventsStore returns a store backed by db. The schema is created by the
+// NewUserSavedEventsStore returns a store backed by db; imageURL builds the
+// URLs of uploaded images (see NewEventStore). The schema is created by the
 // migrations in backend/migrations, not here.
-func NewUserSavedEventsStore(db *sql.DB) *UserSavedEventStoreDBConnection {
-	return &UserSavedEventStoreDBConnection{db: db}
+func NewUserSavedEventsStore(db *sql.DB, imageURL URLFunc) *UserSavedEventStoreDBConnection {
+	return &UserSavedEventStoreDBConnection{db: db, imageURL: imageURL}
 }
 
 func (s *UserSavedEventStoreDBConnection) List() ([]*models.UserSavedEvents, error) {
 	rows, err := s.db.Query(`
-		SELECT e.id, 
-			e.title,
-			e.description, 
-			e.category, 
-			e.start_time, 
-			e.end_time, 
-			e.price,
-			e.venue, 
-			e.address,
-			e.image_url, 
-			e.artist_name, 
-			e.perks, 
-			e.is_saved,
-			e.lat,
-			e.lon, 
-			se.user_id, 
+		SELECT ` + eventColumnsE + `,
+			se.user_id,
 			se.created_at
 		FROM user_saved_events se INNER JOIN events e ON e.id = se.event_id
 	`)
@@ -55,7 +43,7 @@ func (s *UserSavedEventStoreDBConnection) List() ([]*models.UserSavedEvents, err
 	var result []*models.UserSavedEvents
 	byUser := map[string]*models.UserSavedEvents{}
 	for rows.Next() {
-		userID, se, err := scanSavedEvent(rows)
+		userID, se, err := scanSavedEvent(rows, s.imageURL)
 		if err != nil {
 			return nil, err
 		}
@@ -73,22 +61,8 @@ func (s *UserSavedEventStoreDBConnection) List() ([]*models.UserSavedEvents, err
 // Get returns the events saved by a user; SavedEvents is empty (never nil) when there are none.
 func (s *UserSavedEventStoreDBConnection) Get(userID string) (*models.UserSavedEvents, error) {
 	rows, err := s.db.Query(`
-		SELECT e.id, 
-			e.title,
-			e.description, 
-			e.category, 
-			e.start_time, 
-			e.end_time, 
-			e.price,
-			e.venue, 
-			e.address,
-			e.image_url, 
-			e.artist_name, 
-			e.perks, 
-			e.is_saved,
-			e.lat,
-			e.lon, 
-			se.user_id, 
+		SELECT `+eventColumnsE+`,
+			se.user_id,
 			se.created_at
 		FROM user_saved_events se INNER JOIN events e ON e.id = se.event_id
 		WHERE se.user_id = $1
@@ -100,7 +74,7 @@ func (s *UserSavedEventStoreDBConnection) Get(userID string) (*models.UserSavedE
 
 	result := &models.UserSavedEvents{UserId: userID, SavedEvents: []models.SavedEvent{}}
 	for rows.Next() {
-		_, se, err := scanSavedEvent(rows)
+		_, se, err := scanSavedEvent(rows, s.imageURL)
 		if err != nil {
 			return nil, err
 		}
@@ -150,9 +124,9 @@ func (s *UserSavedEventStoreDBConnection) Delete(userId string, eventId string) 
 	return nil
 }
 
-func scanSavedEvent(s scanner) (userID string, se *models.SavedEvent, err error) {
+func scanSavedEvent(s scanner, imageURL URLFunc) (userID string, se *models.SavedEvent, err error) {
 	var createdAt sql.NullTime
-	e, err := scanEvent(extraScanner{s: s, extra: []any{&userID, &createdAt}})
+	e, err := scanEvent(extraScanner{s: s, extra: []any{&userID, &createdAt}}, imageURL)
 	if err != nil {
 		return "", nil, err
 	}

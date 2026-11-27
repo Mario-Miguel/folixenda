@@ -8,7 +8,7 @@ import { formatLongDate } from "@/i18n/format";
 import { Event } from "@/lib/types";
 
 export interface EventDay {
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD: the day of each event's next session
   events: Event[];
 }
 
@@ -40,6 +40,7 @@ export default function MyEventsView({ days }: { days: EventDay[] }) {
                   selected={event.id === selectedEventId}
                   onSelect={() => toggle(event.id)}
                   href={`/events/${event.id}?from=my-events`}
+                  day={date}
                 />
               ))}
             </div>

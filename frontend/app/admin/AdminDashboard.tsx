@@ -1,19 +1,27 @@
 "use client";
 
 import { useState, useEffect, useCallback, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { User, Event, EventCategory } from "@/lib/types";
+import { User, Event } from "@/lib/types";
 import { getUsers, updateUser } from "@/lib/api/users";
 import { deleteUserAction, DeleteUserResult } from "./actions";
-import { getEvents, createEvent, updateEvent, deleteEvent } from "@/lib/api/events";
+import { getEvents, deleteEvent } from "@/lib/api/events";
 import { ApiError } from "@/lib/api/api";
 import { clearApiToken, signOut } from "@/lib/better-auth/client";
+import { formatEventDateRange } from "@/lib/dates";
 import { LogOut, Plus, Pencil, Trash2 } from "lucide-react";
-
-import { CATEGORIES } from "@/lib/categories";
+import { editHref, NEW_EVENT_HREF, SAVED_PARAM } from "@/components/event-editor/routes";
 
 const ROLES = ["admin", "consumer", "publisher"] as const;
+
+// The account type is fixed at signup: a person (consumer) can't become a company
+// (publisher) or vice versa; they need a new account. Granting/removing admin is fine.
+// Mirrors auth.AccountTypeChangeAllowed in the Go API.
+function roleChangeAllowed(from: User["role"], to: User["role"]) {
+  return !((from === "consumer" && to === "publisher") || (from === "publisher" && to === "consumer"));
+}
 
 // Picks a message for a failed API call: permission errors get their own text
 function useErrorMessage() {
@@ -24,7 +32,7 @@ function useErrorMessage() {
       if (err instanceof ApiError && err.status === 401) return t("admin.errors.unauthorized");
       return fallback;
     },
-    [t]
+    [t],
   );
 }
 
@@ -34,7 +42,11 @@ function useErrorMessage() {
 export default function AdminDashboard({ name, currentUserId }: { name: string; currentUserId: string }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const [tab, setTab] = useState<"users" | "events">("users");
+  // The event editor sends admins back with ?tab=events (and ?saved=created|updated)
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<"users" | "events">(() =>
+    searchParams.get("tab") === "events" || searchParams.has(SAVED_PARAM) ? "events" : "users",
+  );
 
   async function handleLogout() {
     await signOut();
@@ -130,7 +142,11 @@ function UsersSection({ currentUserId }: { currentUserId: string }) {
       setEditing(null);
       load();
     } catch (err) {
-      setFeedback(errorMessage(err, t("admin.users.updateFailed")));
+      setFeedback(
+        err instanceof ApiError && err.status === 409
+          ? t("admin.users.accountTypeFixed")
+          : errorMessage(err, t("admin.users.updateFailed"))
+      );
     }
   }
 
@@ -256,12 +272,13 @@ function UserModalForm({
             value={form.role}
             onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as User["role"] }))}
           >
-            {ROLES.map((r) => (
+            {ROLES.filter((r) => roleChangeAllowed(user.role, r)).map((r) => (
               <option key={r} value={r}>
                 {t(`admin.roles.${r}`)}
               </option>
             ))}
           </select>
+          <p className="mt-1 text-xs text-gray-500">{t("admin.users.accountTypeFixed")}</p>
         </Field>
         <ModalActions onClose={onClose} saving={saving} />
       </form>
@@ -271,15 +288,23 @@ function UserModalForm({
 
 // ── Events section ────────────────────────────────────────────────────────────
 
-type EventModal = { mode: "create" } | { mode: "edit"; event: Event };
-
+// Creating and editing happen on the full-page editor (/publisher/events/new, /publisher/events/{id}/edit)
 function EventsSection() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const errorMessage = useErrorMessage();
+  const router = useRouter();
+  const pathname = usePathname();
+  const saved = useSearchParams().get(SAVED_PARAM);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<EventModal | null>(null);
-  const [feedback, setFeedback] = useState("");
+  const [feedback, setFeedback] = useState(() =>
+    saved === "created" ? t("admin.events.created") : saved === "updated" ? t("admin.events.updated") : "",
+  );
+
+  // Drop ?saved= so a reload doesn't show the notice again (stay on the events tab)
+  useEffect(() => {
+    if (saved) router.replace(`${pathname}?tab=events`, { scroll: false });
+  }, [saved, pathname, router]);
 
   const [version, setVersion] = useState(0);
   const load = () => setVersion((v) => v + 1);
@@ -302,34 +327,18 @@ function EventsSection() {
     }
   }
 
-  async function handleSave(data: Partial<Event>, id?: string) {
-    try {
-      if (id) {
-        await updateEvent(id, data);
-        setFeedback(t("admin.events.updated"));
-      } else {
-        await createEvent(data as Omit<Event, "id">);
-        setFeedback(t("admin.events.created"));
-      }
-      setModal(null);
-      load();
-    } catch (err) {
-      setFeedback(errorMessage(err, id ? t("admin.events.updateFailed") : t("admin.events.createFailed")));
-    }
-  }
-
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500">{t("common.eventCount", { count: events.length })}</p>
-        <button
-          onClick={() => setModal({ mode: "create" })}
+        <Link
+          href={NEW_EVENT_HREF}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white transition"
           style={{ backgroundColor: "#ec5b13" }}
         >
           <Plus className="w-4 h-4" />
           {t("admin.events.new")}
-        </button>
+        </Link>
       </div>
 
       {feedback && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 mb-4">{feedback}</p>}
@@ -346,6 +355,7 @@ function EventsSection() {
                   t("admin.fields.category"),
                   t("admin.fields.date"),
                   t("admin.fields.price"),
+                  t("admin.fields.owner"),
                   "",
                 ].map((h) => (
                   <th
@@ -362,17 +372,36 @@ function EventsSection() {
                 <tr key={ev.id} className="hover:bg-gray-50 transition">
                   <td className="px-5 py-3 font-medium text-gray-900 max-w-xs truncate">{ev.title}</td>
                   <td className="px-5 py-3 text-gray-600">{t(`categories.${ev.category}`)}</td>
-                  <td className="px-5 py-3 text-gray-600">{ev.date}</td>
-                  <td className="px-5 py-3 text-gray-600">{ev.price === 0 ? t("common.free") : t("common.price", { price: ev.price })}</td>
+                  <td className="px-5 py-3 text-gray-600 whitespace-nowrap" title={ev.date}>
+                    {formatEventDateRange(ev, i18n.language, true)}
+                  </td>
+                  <td className="px-5 py-3 text-gray-600">
+                    {ev.price === 0 ? t("common.free") : t("common.price", { price: ev.price })}
+                  </td>
+                  <td className="px-5 py-3">
+                    {/* No name lookup endpoint for publishers: show the kind and a short id */}
+                    {ev.publisherId ? (
+                      <span
+                        title={ev.publisherId}
+                        className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700"
+                      >
+                        {t("admin.events.ownerPublisher", { id: ev.publisherId.slice(0, 8) })}
+                      </span>
+                    ) : (
+                      <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                        {t("admin.events.ownerScraped")}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setModal({ mode: "edit", event: ev })}
+                      <Link
+                        href={editHref(ev.id)}
                         aria-label={t("common.edit")}
                         className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
                       >
                         <Pencil className="w-4 h-4" />
-                      </button>
+                      </Link>
                       <button
                         onClick={() => handleDelete(ev.id, ev.title)}
                         aria-label={t("common.delete")}
@@ -388,128 +417,7 @@ function EventsSection() {
           </table>
         </div>
       )}
-
-      {modal && <EventModalForm modal={modal} onSave={handleSave} onClose={() => setModal(null)} />}
     </div>
-  );
-}
-
-function EventModalForm({
-  modal,
-  onSave,
-  onClose,
-}: {
-  modal: EventModal;
-  onSave: (data: Partial<Event>, id?: string) => Promise<void>;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  const editing = modal.mode === "edit" ? modal.event : null;
-  const [form, setForm] = useState({
-    title: editing?.title ?? "",
-    description: editing?.description ?? "",
-    category: editing?.category ?? "Music",
-    startDatetime: editing?.date && editing?.startTime ? `${editing.date}T${editing.startTime}` : "",
-    endDatetime: editing?.date && editing?.endTime ? `${editing.date}T${editing.endTime}` : "",
-    venue: editing?.venue ?? "",
-    address: editing?.address ?? "",
-    price: String(editing?.price ?? 0),
-    artistName: editing?.artistName ?? "",
-  });
-  const [saving, setSaving] = useState(false);
-
-  function set(field: string, value: string) {
-    setForm((f) => ({ ...f, [field]: value }));
-  }
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const [startDate, startTime] = form.startDatetime.split("T");
-    const [, endTime] = form.endDatetime.split("T");
-    const payload: Partial<Event> = {
-      title: form.title,
-      description: form.description,
-      category: form.category as EventCategory,
-      date: startDate,
-      startTime,
-      endTime,
-      venue: form.venue,
-      address: form.address,
-      price: parseFloat(form.price) || 0,
-      artistName: form.artistName || undefined,
-    };
-    await onSave(payload, editing?.id);
-    setSaving(false);
-  }
-
-  return (
-    <Modal title={editing ? t("admin.events.edit") : t("admin.events.new")} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Field label={t("admin.fields.title")}>
-          <input className={inputCls} value={form.title} onChange={(e) => set("title", e.target.value)} required />
-        </Field>
-        <Field label={t("admin.fields.description")}>
-          <textarea
-            className={`${inputCls} resize-none`}
-            rows={3}
-            value={form.description}
-            onChange={(e) => set("description", e.target.value)}
-          />
-        </Field>
-        <Field label={t("admin.fields.category")}>
-          <select className={inputCls} value={form.category} onChange={(e) => set("category", e.target.value)}>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {t(`categories.${c}`)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label={t("admin.fields.start")}>
-            <input
-              type="datetime-local"
-              className={inputCls}
-              value={form.startDatetime}
-              onChange={(e) => set("startDatetime", e.target.value)}
-              required
-            />
-          </Field>
-          <Field label={t("admin.fields.end")}>
-            <input
-              type="datetime-local"
-              className={inputCls}
-              value={form.endDatetime}
-              onChange={(e) => set("endDatetime", e.target.value)}
-              required
-            />
-          </Field>
-        </div>
-        <Field label={t("admin.fields.venue")}>
-          <input className={inputCls} value={form.venue} onChange={(e) => set("venue", e.target.value)} required />
-        </Field>
-        <Field label={t("admin.fields.address")}>
-          <input className={inputCls} value={form.address} onChange={(e) => set("address", e.target.value)} />
-        </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label={t("admin.fields.priceWithCurrency")}>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className={inputCls}
-              value={form.price}
-              onChange={(e) => set("price", e.target.value)}
-            />
-          </Field>
-          <Field label={t("admin.fields.artistHost")}>
-            <input className={inputCls} value={form.artistName} onChange={(e) => set("artistName", e.target.value)} />
-          </Field>
-        </div>
-        <ModalActions onClose={onClose} saving={saving} />
-      </form>
-    </Modal>
   );
 }
 

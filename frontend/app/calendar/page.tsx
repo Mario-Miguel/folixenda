@@ -9,7 +9,8 @@ import LoadError from "@/components/LoadError";
 import MapView from "@/components/MapView";
 import { Event } from "@/lib/types";
 import { CATEGORIES, categoryColor } from "@/lib/categories";
-import { monthRange, startOfMonth, toISODateStr } from "@/lib/dates";
+import { eventSessions, monthRange, sessionDayIndex, startOfMonth, toISODateStr } from "@/lib/dates";
+import { EventSession } from "@/lib/types";
 import { useEvents } from "@/lib/hooks/useEvents";
 import { formatMonthYear, weekdayNames } from "@/i18n/format";
 
@@ -32,10 +33,19 @@ export default function CalendarPage() {
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
 
   const cells = useMemo(() => {
-    const byDate = new Map<string, Event[]>();
-    for (const e of monthEvents) byDate.set(e.date, [...(byDate.get(e.date) ?? []), e]);
+    // A multi-day event shows up on each of its session days, with that day's session
+    type DayEntry = { event: Event; session: EventSession };
+    const byDate = new Map<string, DayEntry[]>();
+    for (const event of monthEvents) {
+      for (const session of eventSessions(event)) {
+        const list = byDate.get(session.date) ?? [];
+        // One entry per event and day, even if it had two sessions that day
+        if (!list.some((x) => x.event.id === event.id)) list.push({ event, session });
+        byDate.set(session.date, list);
+      }
+    }
 
-    const result: { day: number | null; dateStr: string | null; events: Event[] }[] = [];
+    const result: { day: number | null; dateStr: string | null; events: DayEntry[] }[] = [];
 
     for (let i = 0; i < firstDay; i++) {
       result.push({ day: null, dateStr: null, events: [] });
@@ -43,7 +53,7 @@ export default function CalendarPage() {
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = toISODateStr(new Date(year, month, d));
-      const events = (byDate.get(dateStr) ?? []).sort((a, b) => a.startTime.localeCompare(b.startTime));
+      const events = (byDate.get(dateStr) ?? []).sort((a, b) => a.session.startTime.localeCompare(b.session.startTime));
       result.push({ day: d, dateStr, events });
     }
 
@@ -156,16 +166,36 @@ export default function CalendarPage() {
                   <>
                     <span className="text-sm font-medium text-gray-700 block mb-1.5">{day}</span>
                     <div className="space-y-1">
-                      {events.slice(0, 2).map((event) => (
-                        <Link key={event.id} href={`/events/${event.id}`} className="block">
-                          <div
-                            className="text-xs px-1.5 py-0.5 rounded text-white truncate font-medium hover:opacity-90 transition-opacity"
-                            style={{ backgroundColor: categoryColor(event.category) }}
+                      {events.slice(0, 2).map(({ event, session }) => {
+                        const index = sessionDayIndex(event, session.date);
+                        const multiDay = !!index && index.total > 1;
+                        return (
+                          <Link
+                            key={event.id}
+                            href={`/events/${event.id}`}
+                            className="block"
+                            title={[
+                              event.title,
+                              [session.startTime, session.endTime].filter(Boolean).join("–"),
+                              multiDay ? t("display.dayOfTotal", index) : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           >
-                            {event.title}
-                          </div>
-                        </Link>
-                      ))}
+                            <div
+                              className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded text-white font-medium hover:opacity-90 transition-opacity"
+                              style={{ backgroundColor: categoryColor(event.category) }}
+                            >
+                              <span className="truncate">{event.title}</span>
+                              {multiDay && (
+                                <span className="ml-auto shrink-0 text-[10px] opacity-80">
+                                  {t("display.dayOfTotalShort", index)}
+                                </span>
+                              )}
+                            </div>
+                          </Link>
+                        );
+                      })}
                       {events.length > 2 && (
                         <span className="text-xs text-gray-400 font-medium">{t("common.moreCount", { count: events.length - 2 })}</span>
                       )}

@@ -92,6 +92,9 @@ func (h *UsersHandler) update(w http.ResponseWriter, r *http.Request) {
 	} else if !auth.ValidRole(u.Role) {
 		writeError(w, http.StatusBadRequest, "role must be one of admin, consumer, publisher")
 		return
+	} else if !auth.AccountTypeChangeAllowed(existing.Role, u.Role) {
+		writeError(w, http.StatusConflict, "account type can't change between consumer and publisher: create a new account")
+		return
 	}
 
 	if err := h.store.Update(&u); err != nil {

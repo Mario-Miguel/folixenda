@@ -7,6 +7,7 @@ import { Event } from "@/lib/types";
 import EventImage from "@/components/EventImage";
 import SaveEventButton from "@/components/SaveEventButton";
 import { categoryBadgeClass } from "@/lib/categories";
+import { DayBadge, NextDayNote, useEventWhen } from "@/components/EventSchedule";
 
 interface EventCardProps {
   event: Event;
@@ -25,9 +26,13 @@ interface EventCardProps {
   // Detailed media card only: whether the current user saved the event. When given, a working
   // bookmark button is shown; the parent fetches this once for the whole list.
   saved?: boolean;
+  // Day being viewed ("YYYY-MM-DD"): show that day's session times (and "Day 2 of 3" for
+  // multi-day events) instead of the event's overall dates
+  day?: string;
 }
 
-function formatShortDate(date: string, locale: string): string {
+function formatShortDate(date: string | undefined, locale: string): string {
+  if (!date) return "";
   // Parse as local date: "YYYY-MM-DD" alone would be read as UTC midnight
   const d = new Date(`${date}T00:00:00`);
   if (Number.isNaN(d.getTime())) return date;
@@ -43,10 +48,12 @@ export default function EventCard({
   onSelect,
   href: hrefOverride,
   saved,
+  day,
 }: EventCardProps) {
   const { t, i18n } = useTranslation();
   const categoryColor = categoryBadgeClass(event.category);
   const href = hrefOverride ?? `/events/${event.id}`;
+  const when = useEventWhen(event, day);
 
   if (compact) {
     const title = (
@@ -71,6 +78,7 @@ export default function EventCard({
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${categoryColor}`}>
                 {t(`categories.${event.category}`)}
               </span>
+              <DayBadge label={when.dayBadge} />
             </div>
             {onSelect ? (
               // Keyboard/screen-reader target for selecting; mouse users can click anywhere on the card
@@ -80,10 +88,11 @@ export default function EventCard({
             ) : (
               title
             )}
-            <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-              <Clock className="w-3 h-3" />
-              <span>
-                {event.startTime} – {event.endTime}
+            <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 min-w-0">
+              <Clock className="w-3 h-3 shrink-0" />
+              <span className="truncate">
+                {when.range && <span className="font-medium text-gray-700">{when.range} · </span>}
+                {when.time} <NextDayNote show={when.nextDay} />
               </span>
             </div>
             <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 truncate">
@@ -122,9 +131,9 @@ export default function EventCard({
   }
 
   const mediaHeight = detailed ? "h-40" : "h-32";
-  const when = [event.date && formatShortDate(event.date, i18n.language), [event.startTime, event.endTime].filter(Boolean).join(" - ")]
-    .filter(Boolean)
-    .join(" · ");
+  // Day view: that day's date and times; otherwise the event's date (or date range for multi-day)
+  const dateLabel = when.range ?? formatShortDate(day ?? event.date, i18n.language);
+  const whenText = [dateLabel, when.time].filter(Boolean).join(" · ");
 
   return (
     // h-full + flex column: cards in a grid row share the same height, actions pinned to the bottom
@@ -174,10 +183,13 @@ export default function EventCard({
             {event.title}
           </h3>
 
-          {when && (
-            <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
+          {whenText && (
+            <div className="flex items-center gap-1 text-xs text-gray-500 mt-2 min-w-0">
               <Clock className="w-3.5 h-3.5 shrink-0" />
-              <span>{when}</span>
+              <span className="min-w-0">
+                {whenText} <NextDayNote show={when.nextDay} />
+              </span>
+              <DayBadge label={when.dayBadgeShort} />
             </div>
           )}
           {detailed && (

@@ -20,6 +20,8 @@ interface MapViewProps {
   selectedEventId?: string | null;
   onSelectEvent?: (eventId: string | null) => void;
   className?: string;
+  // Day being shown ("YYYY-MM-DD"): event cards show that day's session
+  day?: string;
 }
 
 export default function MapView({
@@ -27,6 +29,7 @@ export default function MapView({
   selectedEventId = null,
   onSelectEvent,
   className = "h-72",
+  day,
 }: MapViewProps) {
   const { t } = useTranslation();
   const selectedEvent = events.find((e) => e.id === selectedEventId);
@@ -46,7 +49,7 @@ export default function MapView({
     <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
       {/* isolate keeps Leaflet's high z-index panes from covering the navbar */}
       <div className={`relative isolate ${className}`}>
-        <EventsMap markers={markers} selectedId={selectedEventId} onSelect={onSelectEvent} />
+        <EventsMap markers={markers} selectedId={selectedEventId} onSelect={onSelectEvent} day={day} />
         {selectedEvent && (
           <div className="absolute z-[1000] top-3 left-14 right-3 sm:right-auto sm:max-w-xs bg-white rounded-xl shadow-md px-3 py-2 flex items-center gap-2">
             <MapPin className="w-4 h-4 shrink-0" style={{ color: "#ec5b13" }} />
