@@ -4,6 +4,8 @@ Esta guía describe cómo funciona la autenticación de usuarios en el frontend 
 
 La autenticación se gestiona con [Better Auth](https://better-auth.com), que se ejecuta **en el servidor de Next.js** (nunca en el navegador). La API de Go no conoce Better Auth: solo recibe un JWT y lo verifica con una clave pública.
 
+Los tipos de cuenta (persona y empresa), la página de perfil, el panel de publicador, la API `/api/me` y el borrado de cuenta están en [perfiles.md](perfiles.md).
+
 ## Índice
 
 - [Arquitectura](#arquitectura)
@@ -41,18 +43,23 @@ Así Next.js es el único que tiene credenciales de la base de datos de auth, y 
 
 | Fichero | Descripción |
 |---------|-------------|
-| `lib/better-auth/server.ts` | Configuración de Better Auth (solo servidor). Exporta `auth` y el tipo `Session`. |
-| `lib/better-auth/client.ts` | Cliente para React: `signIn`, `signUp`, `signOut`, `useSession`, y `getApiToken()` / `clearApiToken()` para el JWT. |
+| `lib/better-auth/server.ts` | Configuración de Better Auth (solo servidor). Exporta `auth` y el tipo `Session`. Decide el rol al registrarse (`databaseHooks`) y activa el borrado de cuenta (`user.deleteUser`). |
+| `lib/better-auth/client.ts` | Cliente para React: `authClient`, `signIn`, `signUp`, `signOut`, `useSession`, y `getApiToken()` / `clearApiToken()` para el JWT. |
+| `lib/better-auth/redirect.ts` | `safeRedirect(target, fallback = "/")` y `homeForRole(role)`, usados por `/login` y `/signup`. |
 | `lib/better-auth/server-token.ts` | `getServerApiToken()`: obtiene el JWT en el servidor a partir de las cookies de la petición (`null` si no hay sesión). |
 | `app/api/auth/[...all]/route.ts` | Expone todos los endpoints de Better Auth en `/api/auth/*`. |
 | `lib/api/api.ts` | Cliente axios de la API de Go. Añade el JWT a cada petición hecha desde el navegador. |
 | `lib/api/users.ts` | `getUsers`, `getUser`, `updateUser` y `deleteUser` contra `/api/users`. No hay creación: las cuentas se crean con el registro de Better Auth. |
+| `lib/api/me.ts` | `getMe`, `updateNotifications`, `getPublisherProfile`, `savePublisherProfile` y `getMyEvents` contra `/api/me/*` (ver [perfiles.md](perfiles.md#apime)). |
 | `app/login/page.tsx` | Página de inicio de sesión (correo y contraseña). |
-| `app/signup/page.tsx` | Página de registro (nombre, correo, contraseña y confirmación). |
+| `app/signup/page.tsx` | Página de registro: tipo de cuenta, nombre, correo, contraseña, confirmación y, para empresas, datos de la organización. |
+| `app/profile/*` | Página `/profile`: Cuenta, Organización, Notificaciones, Seguridad y Zona de peligro (ver [perfiles.md](perfiles.md#profile-mi-perfil)). |
+| `app/publisher/*` | Página `/publisher` "Mis publicaciones" (ver [perfiles.md](perfiles.md#publisher-mis-publicaciones)) y el editor de eventos `/publisher/events/new` y `/publisher/events/[id]/edit` (ver [perfiles.md](perfiles.md#editor-de-eventos)). |
 | `app/admin/page.tsx` | Server Component que comprueba la sesión y el rol antes de mostrar el panel. |
 | `app/admin/AdminDashboard.tsx` | Panel de administración (cliente): pestañas de usuarios y eventos. |
-| `components/Navbar.tsx` | Muestra la inicial del correo del usuario y el menú para cerrar sesión, o un icono que lleva a `/login`. |
-| `i18n/locales/{es,en}.json` | Textos de `login.*`, `signup.*`, `admin.*`, `nav.login` y `nav.logout`. |
+| `app/admin/actions.ts` | Server Action `deleteUserAction` para que un admin borre usuarios. |
+| `components/Navbar.tsx` | Enlaces según el rol, la inicial del correo del usuario y el menú (perfil y cerrar sesión), o un icono que lleva a `/login`. |
+| `i18n/locales/{es,en}.json` | Textos de `login.*`, `signup.*`, `admin.*`, `profile.*`, `publisher.*`, `editor.*`, `nav.login`, `nav.logout`, `nav.profile` y `nav.myPublications`. |
 
 En el backend de Go:
 
@@ -60,10 +67,10 @@ En el backend de Go:
 |---------|-------------|
 | `auth/verifier.go` | Verifica los JWT con el JWKS de Better Auth. |
 | `auth/claims.go`, `auth/context.go` | Claims del token (`email`, `name`, `role` y los registrados) y cómo se guardan en el `context`. |
-| `auth/roles.go` | Constantes `RoleAdmin`, `RoleConsumer`, `RolePublisher`, `ValidRole()` y `Claims.IsAdmin()`. |
+| `auth/roles.go` | Constantes `RoleAdmin`, `RoleConsumer`, `RolePublisher`, `ValidRole()`, `Claims.IsAdmin()` y `CanPublish()` (la única puerta que decide quién puede publicar, ver [perfiles.md](perfiles.md#publicación-de-pago-futuro)). |
 | `middleware/authenticate.go` | `Authenticate`: lee `Authorization: Bearer <jwt>`, lo verifica y guarda los claims. Sin token o con uno inválido → `401`. |
 | `middleware/provision.go` | `Provision`: crea o actualiza el perfil en `public.users`. |
-| `middleware/roles.go` | `RequireRole` y `RequireSelfOrRole` (ver [Permisos por rol](#permisos-por-rol)). |
+| `middleware/roles.go` | `RequireRole`, `RequireSelfOrRole` y `RequireCanPublish` (ver [Permisos por rol](#permisos-por-rol)). |
 | `handlers/*.go` | Cada `Register` recibe `protect` (`Authenticate` → `Provision`) y añade encima las comprobaciones de rol. |
 
 El sistema anterior (login contra Go, `lib/auth.ts` con `localStorage`, `lib/api/auth.ts` y el hashing con bcrypt en Go) ya se ha eliminado.
@@ -77,7 +84,9 @@ Todo está en `lib/better-auth/server.ts`:
 | `database` | `pg.Pool` con `search_path=auth` | Las tablas de auth viven en su propio schema, separadas de las de negocio. |
 | `advanced.database.generateId` | `"uuid"` | IDs estables y estándar; son el `sub` del JWT y lo que Go usará como id de usuario. |
 | `emailAndPassword` | Activado, hash con **argon2id** | Better Auth usa scrypt por defecto. Con argon2id (formato PHC estándar `$argon2id$v=19$m=19456,t=2,p=1$…`) las contraseñas se pueden verificar desde Go si se migra la auth, sin obligar a los usuarios a cambiarla. |
-| `user.additionalFields.role` | `string`, por defecto `"consumer"`, `input: false` | Rol del usuario (`admin`, `consumer`, `publisher`). El usuario no puede elegirlo al registrarse. |
+| `user.additionalFields.role` | `string`, por defecto `"consumer"`, `input: false` | Rol del usuario (`admin`, `consumer`, `publisher`). El cliente nunca puede fijarlo directamente. |
+| `user.deleteUser` | `enabled: true` | Activa `POST /api/auth/delete-user` para que el usuario borre su cuenta desde `/profile` (pide la contraseña). |
+| `databaseHooks.user.create.before` | `signupRole(ctx)` | Fija el rol de cada usuario nuevo: `publisher` solo si la petición es `/sign-up/email` con `accountType: "publisher"` en el cuerpo; `consumer` en cualquier otro caso. Nunca `admin` (ver [perfiles.md](perfiles.md#cómo-se-decide-el-rol)). |
 | `session.expiresIn` / `updateAge` | 7 días / 1 día | La sesión dura 7 días y se renueva como mucho una vez al día. |
 | `session.cookieCache` | 5 minutos, estrategia `jwt` | Evita consultar la base de datos en cada lectura de la sesión. |
 | Plugin `jwt` | EdDSA (Ed25519), 15 minutos | Emite los JWT para Go. Payload: `sub`, `email`, `name`, `role`, `iss`, `aud`, `iat`, `exp`. |
@@ -101,7 +110,8 @@ Detalles a tener en cuenta:
 
 - `public.users` es la tabla de **perfil** del usuario en Go. Su `id` es `uuid` (el mismo que `auth."user".id` y que el `sub` del JWT) y es clave foránea hacia `auth."user"(id)` con `ON DELETE CASCADE`.
 - `user_saved_events.user_id` apunta a `public.users(id)` y `event_id` a `events(id)`, ambos con `ON DELETE CASCADE`. Borrar un usuario de Better Auth borra su perfil y sus eventos guardados; borrar un evento borra los guardados que lo referencian.
-- Las filas las crea el middleware `Provision` la primera vez que el usuario llama a un endpoint protegido. Un usuario que se ha registrado pero nunca ha llamado a la API de Go no aparece en `public.users` (ni, por tanto, en `/admin`).
+- `publisher_profiles`, `notification_preferences` y `events.publisher_id` también apuntan a `public.users(id)` con `ON DELETE CASCADE`: borrar un usuario borra además su organización, sus preferencias y los eventos que publicó (ver [perfiles.md](perfiles.md#borrado-de-cuenta-en-cascada)).
+- Las filas las crea el middleware `Provision` la primera vez que el usuario llama a un endpoint protegido. Un usuario que se ha registrado pero nunca ha llamado a la API de Go no aparece en `public.users` (ni, por tanto, en `/admin`). Un publicador que se registra llama enseguida a `PUT /api/me/publisher-profile`, así que su perfil se crea en ese momento.
 - `PUT /api/users/{id}` actualiza `public.users` y también `role` y `name` de `auth."user"` en **una misma transacción**. Better Auth es el origen de los claims del JWT, así que sin esa segunda escritura el cambio no llegaría nunca al token (y `Provision` lo desharía en el siguiente upsert).
 
 Para eso, el rol con el que se conecta Go necesita estos permisos sobre el schema `auth`:
@@ -125,6 +135,8 @@ GRANT SELECT, REFERENCES, UPDATE (role, name, "updatedAt") ON auth."user" TO <ro
 3. Migraciones de Go, en `backend/migrations/` (con [goose](https://github.com/pressly/goose), embebidas en el binario). El servidor aplica las pendientes al arrancar; también se pueden lanzar a mano desde `backend/` con `go run ./cmd/migrate` (`up`, `status` o `down`). Las versiones aplicadas se guardan en la tabla `goose_db_version`.
    - `00001_initial_schema.sql`: crea `events`, `users`, `publisher_predefined_events` y `user_saved_events` (si no existen). Necesita que exista `auth."user"` por la clave foránea.
    - `00002_user_cascade.sql`: para bases de datos creadas antes de las migraciones. Convierte los `id` de usuario a `uuid` y rehace las claves foráneas con `ON DELETE CASCADE`. **Borra** las filas de `public.users` (y sus eventos guardados) que no tengan un usuario en `auth."user"`, porque si existen no se puede crear la clave foránea. Es irreversible.
+   - `00003_publishers_and_notifications.sql`: crea `publisher_profiles` y `notification_preferences` y añade a `events` las columnas `publisher_id` (propietario, `ON DELETE CASCADE`), `created_at` y `updated_at` (ver [perfiles.md](perfiles.md#modelo-de-datos)).
+   - `00004_event_sessions_and_images.sql`: crea `event_sessions` (días de cada evento, con el trigger `events_default_session` para los eventos que insertan los scrapers) y `event_images` (imágenes subidas) (ver [eventos.md](eventos.md#modelo-de-datos)).
 
    Para cambiar el esquema, añade un fichero nuevo `0000N_descripcion.sql` con `-- +goose Up` / `-- +goose Down`; no edites migraciones ya aplicadas.
 
@@ -149,22 +161,27 @@ En `backend/.env`, además de la conexión a Postgres (`POSTGRES_*`) y `PORT`:
 | `AUTH_ISSUER` | `http://localhost:3000` | `iss` esperado. Debe coincidir con `BETTER_AUTH_URL`. |
 | `AUTH_AUDIENCE` | `http://localhost:3000` | `aud` esperado. Debe coincidir con `BETTER_AUTH_URL`. |
 
+`backend/.env.example` es la plantilla completa (cópiala a `backend/.env`), incluidas las variables del almacenamiento de imágenes (`STORAGE_DRIVER`, `LOCAL_STORAGE_*`, `S3_*`, ver [eventos.md](eventos.md#almacenamiento-de-imágenes-backend)).
+
 ## Páginas y componentes
 
 ### `/login`
 
 - Formulario de correo y contraseña que llama a `signIn.email()`.
-- Si las credenciales son correctas, redirige a la ruta de `?redirect=` (o a `/` si no hay) y refresca la página para que se renderice con la sesión. `safeRedirect()` solo acepta rutas del propio sitio (empiezan por `/` pero no por `//` ni `/\`), para que el parámetro no pueda llevar a otro dominio.
-- Las páginas protegidas envían aquí con `?redirect=`: `/my-events` y `/admin` al no haber sesión, y `SaveEventButton` cuando la API responde `401`.
+- Si las credenciales son correctas, borra el JWT en caché (`clearApiToken()`, para no usar el de una sesión anterior con otro usuario o rol), redirige y refresca la página para que se renderice con la sesión. El destino es `safeRedirect(?redirect, homeForRole(rol))` (`lib/better-auth/redirect.ts`): la ruta de `?redirect=` si la hay y, si no, `/publisher` para los `publisher` y `/` para el resto. `safeRedirect()` solo acepta rutas del propio sitio (empiezan por `/` pero no por `//` ni `/\`), para que el parámetro no pueda llevar a otro dominio.
+- Las páginas protegidas envían aquí con `?redirect=`: `/my-events`, `/profile`, `/publisher`, el editor (`/publisher/events/*`) y `/admin` al no haber sesión, y `SaveEventButton` cuando la API responde `401`.
 - Errores: `401` → "Correo o contraseña incorrectos"; cualquier otro → error genérico.
 - Enlace "¿No tienes cuenta? Crear cuenta" a `/signup`.
 
 ### `/signup`
 
-- Formulario de nombre, correo, contraseña y repetición de contraseña que llama a `signUp.email()`.
-- Validación en el cliente: las contraseñas deben coincidir y tener al menos 8 caracteres (`MIN_PASSWORD_LENGTH`, que debe coincidir con `minPasswordLength` de Better Auth, 8 por defecto).
-- Better Auth inicia la sesión automáticamente tras el registro, así que redirige a `/`.
-- Los usuarios nuevos tienen rol `consumer`.
+- Empieza con el selector de tipo de cuenta: **Persona** (`consumer`, por defecto) o **Empresa / plataforma** (`publisher`). Con Empresa, el nombre pasa a ser "Nombre de contacto" y se añaden los datos de la organización.
+- Formulario de nombre, correo, contraseña y repetición de contraseña que llama a `signUp.email()` con `fetchOptions: { body: { accountType } }`. El rol lo decide el servidor (`databaseHooks.user.create.before`); el cliente nunca envía `role`.
+- Validación en el cliente: las contraseñas deben coincidir y tener al menos 8 caracteres (`MIN_PASSWORD_LENGTH`, que debe coincidir con `minPasswordLength` de Better Auth, 8 por defecto). Para empresas, también los datos de la organización.
+- Better Auth inicia la sesión automáticamente tras el registro. Después se borra el JWT en caché y:
+  - **Persona:** redirige a `?redirect=` (con `safeRedirect`) o a `/`.
+  - **Empresa:** guarda la organización con `savePublisherProfile` y va a `/publisher`; si falla, va a `/profile?completeOrg=1` para terminarla.
+- Detalles en [perfiles.md](perfiles.md#registro-con-tipo-de-cuenta).
 - Errores traducidos según el código de Better Auth:
 
   | Código | Mensaje |
@@ -178,8 +195,13 @@ En `backend/.env`, además de la conexión a Postgres (`POSTGRES_*`) y `PORT`:
 
 - Lee la sesión con `useSession()`.
 - **Sin sesión:** icono de usuario que enlaza a `/login`.
-- **Con sesión:** círculo con la primera letra del correo en mayúscula. Al pulsarlo se abre un menú con el correo y "Cerrar sesión", que llama a `signOut()`, borra el JWT en caché y redirige a `/`.
+- **Con sesión:** círculo con la primera letra del correo en mayúscula. Al pulsarlo se abre un menú con el correo, el enlace personal (solo en móvil), "Mi perfil" (`/profile`) y "Cerrar sesión", que llama a `signOut()`, borra el JWT en caché y redirige a `/`.
+- El enlace personal depende del rol: "Mis publicaciones" (`/publisher`) para `publisher` y "Mis eventos" (`/my-events`) para el resto.
 - Si el rol es `admin`, muestra el enlace a `/admin`.
+
+### `/profile` y `/publisher`
+
+Ver [perfiles.md](perfiles.md#páginas).
 
 ### `/admin`
 
@@ -192,8 +214,8 @@ En `backend/.env`, además de la conexión a Postgres (`POSTGRES_*`) y `PORT`:
 `AdminDashboard` tiene dos pestañas:
 
 - **Usuarios:** lista de `GET /api/users`. Se puede editar el **nombre** y el **rol** (el correo se muestra pero no se puede cambiar, porque es el login de Better Auth) y eliminar. No hay creación de usuarios: las cuentas se crean con `/signup`.
-- **Eliminar usuario:** el botón llama a la Server Action `deleteUserAction` (`app/admin/actions.ts`), no a la API de Go. Comprueba en el servidor que la sesión es de un `admin` y que no se borra a sí mismo (el botón de su propia fila está desactivado), y borra el usuario con `internalAdapter.deleteUser` de Better Auth (usuario, sesiones y cuentas). El perfil de `public.users` y sus eventos guardados se borran solos por `ON DELETE CASCADE`. El JWT que el usuario ya tuviera sigue siendo válido hasta 15 minutos, pero sus peticiones fallan porque su perfil ya no existe.
-- **Eventos:** lista, creación, edición y borrado de eventos.
+- **Eliminar usuario:** el botón llama a la Server Action `deleteUserAction` (`app/admin/actions.ts`), no a la API de Go. Comprueba en el servidor que la sesión es de un `admin` y que no se borra a sí mismo (el botón de su propia fila está desactivado), y borra el usuario con `internalAdapter.deleteUser` de Better Auth (usuario, sesiones y cuentas). El perfil de `public.users`, sus eventos guardados, su organización, sus preferencias y los eventos que publicó se borran solos por `ON DELETE CASCADE` (ver [perfiles.md](perfiles.md#borrado-de-cuenta-en-cascada)). El JWT que el usuario ya tuviera sigue siendo válido hasta 15 minutos, pero sus peticiones fallan porque su perfil ya no existe.
+- **Eventos:** lista y borrado de **todos** los eventos; crear y editar llevan al editor de eventos (`/publisher/events/new` y `/publisher/events/{id}/edit`, el mismo que usan los publicadores), que vuelve a `/admin?tab=events`. La columna **Propietario** muestra "Publicador `<id corto>`" o "Sin publicador".
 
 Los errores `403` muestran "No tienes permiso para realizar esta acción" y los `401` "Tu sesión ha caducado. Vuelve a iniciar sesión" (`admin.errors.*`); el resto, un mensaje genérico de cada acción. "Cerrar sesión" llama a `signOut()`, borra el JWT en caché y vuelve a `/`.
 
@@ -242,20 +264,29 @@ Payload:
 
 ## Permisos por rol
 
-Roles: `admin`, `publisher` y `consumer` (por defecto al registrarse). Se comprueban en Go con los middlewares de `middleware/roles.go`, después de `Authenticate` y `Provision`:
+Roles: `admin`, `publisher` y `consumer`. Al registrarse se elige entre `consumer` (Persona, por defecto) y `publisher` (Empresa / plataforma); `admin` solo se da después (ver [perfiles.md](perfiles.md#roles-y-tipos-de-cuenta)). Se comprueban en Go con los middlewares de `middleware/roles.go`, después de `Authenticate` y `Provision`:
 
 - `RequireRole(roles...)`: sin claims → `401`; rol no incluido → `403`.
 - `RequireSelfOrRole("id", roles...)`: deja pasar si el `{id}` de la ruta es el `sub` del token o si el rol está incluido; si no, `403`.
+- `RequireCanPublish`: sin claims → `401`; si `auth.CanPublish` es falso → `403`. Hoy deja pasar a `admin` y `publisher`; es el sitio donde irá la comprobación de suscripción cuando publicar sea de pago.
 
 | Endpoint | Quién puede |
 |----------|-------------|
 | `GET /api/events`, `GET /api/events/{id}` | Cualquiera, sin sesión |
-| `POST /api/events`, `PUT /api/events/{id}`, `DELETE /api/events/{id}` | `admin` o `publisher` |
+| `POST /api/events` | `RequireCanPublish` (`admin` o `publisher`). Un `publisher` queda siempre como propietario; un `admin` puede indicar `publisherId` u omitirlo |
+| `PUT /api/events/{id}`, `DELETE /api/events/{id}` | `RequireRole(admin, publisher)`. `admin`, cualquier evento; `publisher`, solo los suyos (si no, `403`) |
+| `POST /api/events/{id}/images`, `DELETE /api/events/{id}/images/{imageId}`, `PUT /api/events/{id}/images/order` | Igual que `PUT /api/events/{id}` |
+| `GET /api/geocode/search`, `GET /api/geocode/reverse` | `RequireCanPublish` (`admin` o `publisher`) |
+| `GET /uploads/...` | Cualquiera, sin sesión (solo con `STORAGE_DRIVER=local`) |
+| `GET /api/me`, `PUT /api/me/notifications` | Cualquier usuario con sesión |
+| `GET /api/me/publisher-profile`, `PUT /api/me/publisher-profile`, `GET /api/me/events` | `publisher` |
 | `GET /api/users` | `admin` |
 | `GET /api/users/{id}`, `PUT /api/users/{id}` | `admin`, o el propio usuario. Si no es `admin`, el campo `role` del cuerpo se ignora |
 | `GET /api/savedEvents`, `GET /api/savedEvents/{eventId}`, `POST /api/savedEvents`, `DELETE /api/savedEvents/{eventId}` | Cualquier usuario con sesión. El usuario sale siempre del token, no de la URL ni del cuerpo |
 
-No hay `DELETE /api/users/{id}` (responde `405`): los usuarios se borran en Better Auth desde `/admin` y el perfil de Go se borra en cascada.
+No hay `DELETE /api/users/{id}` (responde `405`): los usuarios se borran en Better Auth (desde `/admin` o el propio usuario desde `/profile`) y el perfil de Go se borra en cascada.
+
+El contrato completo de `/api/me/*` y las reglas de propiedad de los eventos están en [perfiles.md](perfiles.md#api).
 
 Detalles de `PUT /api/users/{id}`:
 
@@ -264,7 +295,7 @@ Detalles de `PUT /api/users/{id}`:
 - Si lo hace un `admin`, el `role` debe ser `admin`, `consumer` o `publisher` (si no, `400`).
 - El cambio de `role` y `name` se escribe también en `auth."user"` (ver [Perfil de Go](#perfil-de-go-publicusers)), pero llega al JWT del usuario afectado con retraso: como mucho 5 minutos de caché de cookie más 15 minutos de vida del JWT en caché. Hasta entonces Go sigue autorizando con el rol anterior.
 
-En el frontend, `/admin` solo es accesible para `admin` (ver [`/admin`](#admin)).
+En el frontend, `/admin` solo es accesible para `admin` (ver [`/admin`](#admin)) el panel de `/publisher` solo para `publisher` y el editor de eventos para `publisher` y `admin` (los demás ven una tarjeta explicativa).
 
 ## Puesta en marcha
 
@@ -298,6 +329,8 @@ curl -X POST http://localhost:3000/api/auth/sign-up/email \
   -H "Content-Type: application/json" \
   -d '{"email":"usuario@example.com","password":"minimo8caracteres","name":"Nombre"}'
 ```
+
+Para crear un publicador, añade `"accountType":"publisher"` al JSON. Cualquier otro valor (también `"admin"`) crea un `consumer`, y `role` en el cuerpo no tiene efecto.
 
 **Dar rol de administrador** (el primero hay que darlo así; después se puede hacer desde `/admin`):
 
@@ -334,16 +367,20 @@ const session = await auth.api.getSession({ headers: await headers() });
 | `POST` | `/sign-out` | Cerrar sesión |
 | `GET` | `/get-session` | Sesión actual |
 | `GET` | `/token` | JWT para la API de Go |
+| `POST` | `/update-user` | Cambiar el nombre (`/profile`) |
+| `POST` | `/change-password` | Cambiar la contraseña (`/profile`) |
+| `POST` | `/delete-user` | Borrar la propia cuenta, con contraseña (`/profile`) |
 | `GET` | `/jwks` | Claves públicas para verificar los JWT |
 
 ## Pendiente
 
 - **Caché de `Provision`:** no se limpia al borrar un usuario. Durante los 15 minutos que le queden al JWT del usuario borrado, Go no vuelve a hacer el upsert y sus peticiones fallan (por ejemplo, guardar un evento da `404` por la clave foránea). Si Go se reinicia en ese rato, el upsert falla con `500`. En ambos casos no se recrea nada.
 - **Rol antiguo tras reiniciar Go:** la caché de `Provision` está en memoria. Si Go se reinicia mientras un usuario aún tiene un JWT emitido antes de un cambio de rol, el primer upsert escribe el rol antiguo en `public.users` hasta que llegue un token nuevo. La autorización no se ve afectada (usa el rol del token), pero `/admin` puede mostrar el rol antiguo durante ese rato.
+- **Tipos de cuenta, perfil y publicadores:** ver la lista de pendientes de [perfiles.md](perfiles.md#pendiente) (pagos, envío de notificaciones, cambio de correo, etc.).
 - **`better_auth.sql` sin versionar:** sigue en `db_queries/` (ignorado por git), porque crea un rol con contraseña. Las migraciones de Go sí están versionadas en `backend/migrations/`.
 
 ## Otros cambios en el frontend
 
 - **Dependencias nuevas:** `better-auth`, `pg`, `@node-rs/argon2` y `@types/pg` (dev).
 - **`pnpm-workspace.yaml`:** `allowBuilds` permite ejecutar los scripts de instalación de `sharp` (optimización de imágenes de Next.js) y `unrs-resolver` (usado por ESLint). pnpm 10+ los bloquea por defecto.
-- **Tipos de eventos de formulario:** `FormEvent` está obsoleto en los tipos de React 19; los formularios nuevos usan `SubmitEvent<HTMLFormElement>`. `AdminDashboard` todavía usa `FormEvent`.
+- **Tipos de eventos de formulario:** `FormEvent` está obsoleto en los tipos de React 19; los formularios nuevos usan `SubmitEvent<HTMLFormElement>`. `AdminDashboard` (formulario de usuarios) y `components/event-editor/EventEditor.tsx` todavía usan `FormEvent`.
