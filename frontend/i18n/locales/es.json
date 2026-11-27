@@ -54,12 +54,21 @@
     "notifications": "Notificaciones",
     "language": "Idioma",
     "login": "Iniciar sesión",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "profile": "Perfil",
+    "myPublications": "Mis publicaciones"
   },
   "myEvents": {
     "noSavedEvents": "No tienes eventos guardados próximos",
     "browseEvents": "Descubre eventos para guardar",
     "loadError": "No se han podido cargar tus eventos guardados"
+  },
+  "display": {
+    "dayOfTotal": "Día {{day}} de {{total}}",
+    "dayOfTotalShort": "{{day}}/{{total}}",
+    "multiDay": "{{count}} días",
+    "variableSchedule": "Horario variable",
+    "endsNextDay": "+1 día"
   },
   "event": {
     "backToEvents": "Volver a los eventos",
@@ -78,7 +87,24 @@
     "shareError": "No se ha podido copiar el enlace",
     "saveForLater": "Guardar para después",
     "saved": "Guardado",
-    "moreCategoryEvents": "Más eventos de {{category}}"
+    "moreCategoryEvents": "Más eventos de {{category}}",
+    "backToPublisher": "Volver a mis publicaciones",
+    "organizedBy": "Organizado por",
+    "website": "Sitio web",
+    "phone": "Teléfono",
+    "youArePublisher": "Has publicado este evento.",
+    "editInPublisher": "Editar evento",
+    "datesAndTimes": "Fechas y horarios",
+    "sessionEnded": "Ya pasó",
+    "nextSession": "Próxima",
+    "endsNextDay": "termina al día siguiente",
+    "gallery": "Galería",
+    "galleryImageAlt": "{{title}}, imagen {{index}} de {{total}}",
+    "openImage": "Ampliar imagen {{index}} de {{total}}",
+    "closeGallery": "Cerrar galería",
+    "previousImage": "Imagen anterior",
+    "nextImage": "Imagen siguiente",
+    "imageCounter": "{{index}} / {{total}}"
   },
   "admin": {
     "access": "Acceso de administrador",
@@ -109,7 +135,8 @@
       "end": "Fin",
       "venue": "Lugar",
       "address": "Dirección",
-      "artistHost": "Artista / Organizador (opcional)"
+      "artistHost": "Artista / Organizador (opcional)",
+      "owner": "Propietario"
     },
     "roles": {
       "admin": "admin",
@@ -124,6 +151,7 @@
       "confirmDelete": "¿Eliminar el usuario \"{{name}}\"? Se borrarán su cuenta, sus sesiones y sus eventos guardados. No se puede deshacer.",
       "deleted": "Usuario eliminado.",
       "deleteFailed": "No se pudo eliminar el usuario.",
+      "accountTypeFixed": "El tipo de cuenta (persona o empresa) no se puede cambiar: para usar el otro tipo hay que crear una cuenta nueva. Sí se puede dar o quitar el rol de admin.",
       "deleteSelf": "No puedes eliminar tu propio usuario.",
       "notFound": "El usuario ya no existe.",
       "updated": "Usuario actualizado.",
@@ -139,7 +167,150 @@
       "updated": "Evento actualizado.",
       "updateFailed": "No se pudo actualizar el evento.",
       "created": "Evento creado.",
-      "createFailed": "No se pudo crear el evento."
+      "createFailed": "No se pudo crear el evento.",
+      "ownerPublisher": "Publicador {{id}}",
+      "ownerScraped": "Sin publicador"
+    }
+  },
+  "publisher": {
+    "title": "Mis publicaciones",
+    "subtitle": "Gestiona los eventos que publica {{org}}",
+    "newEvent": "Nuevo evento",
+    "editEvent": "Editar evento",
+    "loadError": "No se han podido cargar tus publicaciones",
+    "profileBanner": "Completa los datos de tu organización para que aparezcan en tus eventos",
+    "profileBannerLink": "Completar perfil",
+    "adminNote": {
+      "title": "Eres administrador",
+      "text": "Las cuentas de administrador gestionan todos los eventos desde el panel de administración.",
+      "link": "Ir al panel de administración"
+    },
+    "consumerCard": {
+      "title": "Esta zona es para organizadores",
+      "text": "«Mis publicaciones» es para cuentas de empresas y plataformas que publican sus propios eventos. Con tu cuenta personal puedes guardar los eventos que te interesan.",
+      "profileLink": "Ir a mi perfil",
+      "myEventsLink": "Ver mis eventos guardados"
+    },
+    "stats": {
+      "upcoming": "Próximos",
+      "saves": "Guardados en total",
+      "past": "Pasados"
+    },
+    "tabs": {
+      "upcoming": "Próximos",
+      "past": "Pasados"
+    },
+    "savedBy_zero": "Nadie lo ha guardado todavía",
+    "savedBy_one": "Guardado por {{count}} persona",
+    "savedBy_other": "Guardado por {{count}} personas",
+    "ended": "Finalizado",
+    "viewPublic": "Ver página pública",
+    "confirmDelete": "¿Eliminar «{{title}}»? Dejará de verse en folixenda y se perderán sus guardados. No se puede deshacer.",
+    "created": "Evento publicado.",
+    "updated": "Evento actualizado.",
+    "deleted": "Evento eliminado.",
+    "empty": {
+      "firstTitle": "Publica tu primer evento",
+      "firstText": "Crea un evento y aparecerá en el calendario y en el mapa de folixenda.",
+      "firstCta": "Crear mi primer evento",
+      "noUpcoming": "No tienes eventos próximos.",
+      "noPast": "Todavía no tienes eventos pasados."
+    },
+    "errors": {
+      "unauthorized": "Tu sesión ha caducado. Vuelve a iniciar sesión.",
+      "forbidden": "Solo puedes modificar los eventos que has publicado tú.",
+      "badRequest": "Revisa los datos del evento: {{message}}",
+      "notFound": "Este evento ya no existe.",
+      "createFailed": "No se ha podido crear el evento.",
+      "updateFailed": "No se ha podido actualizar el evento.",
+      "deleteFailed": "No se ha podido eliminar el evento."
+    }
+  },
+  "profile": {
+    "title": "Mi perfil",
+    "subtitle": "Gestiona tu cuenta, tus preferencias y tu seguridad",
+    "loadError": "No hemos podido cargar algunos datos de tu perfil. Recarga la página para intentarlo de nuevo.",
+    "optional": "(opcional)",
+    "save": "Guardar cambios",
+    "saving": "Guardando…",
+    "saved": "Cambios guardados.",
+    "errors": {
+      "unauthorized": "Tu sesión ha caducado. Vuelve a iniciar sesión.",
+      "forbidden": "No tienes permiso para realizar esta acción.",
+      "badRequest": "Algunos datos no son válidos. Revísalos e inténtalo de nuevo.",
+      "wrongPassword": "La contraseña no es correcta.",
+      "passwordTooLong": "La contraseña es demasiado larga.",
+      "generic": "Algo ha ido mal. Inténtalo de nuevo."
+    },
+    "account": {
+      "title": "Cuenta",
+      "type": "Tipo de cuenta",
+      "memberSince": "Miembro desde",
+      "typeFixed": "El tipo de cuenta no se puede cambiar. Para usar folixenda como persona y como empresa, crea una cuenta distinta (con otro correo) para cada una.",
+      "emailReadOnly": "El correo electrónico no se puede cambiar.",
+      "nameRequired": "El nombre no puede estar vacío.",
+      "roles": {
+        "consumer": "Persona",
+        "publisher": "Empresa",
+        "admin": "Admin"
+      }
+    },
+    "org": {
+      "title": "Organización",
+      "subtitle": "Estos datos aparecen junto a los eventos que publicas.",
+      "orgName": "Nombre de la organización",
+      "website": "Sitio web",
+      "phone": "Teléfono",
+      "description": "Descripción",
+      "incompleteTitle": "Completa los datos de tu organización",
+      "incompleteBody": "Añade al menos el nombre de tu organización para que aparezca en tus eventos.",
+      "incompleteAfterSignup": "Tu cuenta se ha creado, pero no hemos podido guardar los datos de la organización. Complétalos aquí para empezar a publicar.",
+      "errors": {
+        "orgName": "El nombre debe tener entre {{min}} y {{max}} caracteres.",
+        "website": "Introduce una URL que empiece por http:// o https://.",
+        "phone": "Máximo {{max}} caracteres: solo números, espacios y + - ( ) .",
+        "description": "La descripción no puede superar los {{max}} caracteres."
+      }
+    },
+    "notifications": {
+      "title": "Notificaciones",
+      "subtitle": "Elige sobre qué quieres que te avisemos.",
+      "comingSoon": "Todavía no enviamos correos. Guardamos tus preferencias y próximamente te avisaremos según lo que elijas aquí.",
+      "savedEventReminders": "Recordatorios de eventos guardados",
+      "savedEventRemindersHint": "Un aviso antes de los eventos que has guardado.",
+      "categoryNews": "Novedades de tus categorías favoritas",
+      "categoryNewsHint": "Nuevos eventos en las categorías que elijas.",
+      "favouriteCategories": "Categorías favoritas",
+      "noCategories": "Elige al menos una categoría para recibir novedades.",
+      "newsletter": "Boletín de folixenda",
+      "newsletterHint": "Noticias ocasionales sobre folixenda.",
+      "publisherActivity": "Actividad en mis eventos",
+      "publisherActivityHint": "Por ejemplo, cuando alguien guarda uno de tus eventos."
+    },
+    "security": {
+      "title": "Seguridad",
+      "subtitle": "Cambia tu contraseña.",
+      "currentPassword": "Contraseña actual",
+      "newPassword": "Nueva contraseña",
+      "otherSessions": "Al cambiarla se cerrará la sesión en el resto de dispositivos.",
+      "change": "Cambiar contraseña",
+      "changed": "Contraseña actualizada."
+    },
+    "danger": {
+      "title": "Zona de peligro",
+      "subtitle": "Eliminar tu cuenta de forma permanente.",
+      "whatIsDeleted": "Se eliminará:",
+      "items": {
+        "account": "Tu cuenta, tus datos de acceso y tus sesiones.",
+        "saved": "Tus eventos guardados.",
+        "preferences": "Tus preferencias de notificaciones.",
+        "publisher": "Los datos de tu organización y todos los eventos que has publicado."
+      },
+      "irreversible": "Esta acción no se puede deshacer.",
+      "confirmWord": "ELIMINAR",
+      "typeToConfirm": "Escribe {{word}} para confirmar",
+      "delete": "Eliminar mi cuenta",
+      "deleting": "Eliminando…"
     }
   },
   "login": {
@@ -166,6 +337,172 @@
     "passwordMismatch": "Las contraseñas no coinciden.",
     "passwordTooShort": "La contraseña debe tener al menos {{min}} caracteres.",
     "emailTaken": "Ya existe una cuenta con ese correo.",
-    "invalidEmail": "El correo electrónico no es válido."
+    "invalidEmail": "El correo electrónico no es válido.",
+    "subtitlePublisher": "Publica y gestiona los eventos de tu organización",
+    "contactName": "Nombre de la persona de contacto",
+    "orgSection": "Datos de la organización",
+    "orgSectionHint": "Se mostrarán junto a los eventos que publiques. Podrás cambiarlos en tu perfil.",
+    "accountType": {
+      "label": "Tipo de cuenta",
+      "permanent": "No podrás cambiarlo después: para usar el otro tipo tendrás que crear otra cuenta.",
+      "consumer": "Persona",
+      "consumerHint": "Descubre y guarda eventos",
+      "publisher": "Empresa o plataforma",
+      "publisherHint": "Publica tus eventos"
+    }
+  },
+  "editor": {
+    "newTitle": "Nuevo evento",
+    "editTitle": "Editar evento",
+    "backToPublisher": "Mis publicaciones",
+    "backToAdmin": "Panel de administración",
+    "leaveConfirm": "Tienes cambios sin guardar. ¿Salir igualmente?",
+    "access": {
+      "onlyPublishersTitle": "Solo para organizadores",
+      "onlyPublishersText": "Crear y editar eventos está disponible para cuentas de empresas y plataformas.",
+      "notOwnerTitle": "No puedes editar este evento",
+      "notOwnerText": "Solo puedes modificar los eventos que has publicado tú.",
+      "loadErrorTitle": "No se ha podido cargar el evento",
+      "loadErrorText": "Inténtalo de nuevo dentro de un momento.",
+      "backHome": "Volver al inicio"
+    },
+    "notice": {
+      "created": "Evento creado.",
+      "uploadsFailed_one": "No se ha podido subir {{count}} imagen. Puedes volver a intentarlo abajo:",
+      "uploadsFailed_other": "No se han podido subir {{count}} imágenes. Puedes volver a intentarlo abajo:"
+    },
+    "bar": {
+      "save": "Guardar cambios",
+      "publish": "Publicar evento",
+      "saveAndView": "Guardar y ver",
+      "saving": "Guardando el evento…",
+      "uploading": "Subiendo imágenes ({{done}}/{{total}})…",
+      "unsaved": "Cambios sin guardar",
+      "noChanges": "Sin cambios"
+    },
+    "info": {
+      "title": "Información",
+      "name": "Título",
+      "namePlaceholder": "Ej.: Concierto de jazz en el Campoamor",
+      "category": "Categoría",
+      "categoryPlaceholder": "Elige una categoría",
+      "description": "Descripción",
+      "descriptionPlaceholder": "Cuenta de qué va el evento, a quién va dirigido…",
+      "artist": "Artista o intérprete",
+      "artistHint": "Opcional",
+      "price": "Precio",
+      "free": "Gratis",
+      "perks": "Extras",
+      "perksHint": "Pulsa Intro o coma para añadir cada uno (máx. {{max}})",
+      "perksPlaceholder": "Ej.: Aparcamiento, Accesible…",
+      "removePerk": "Quitar «{{perk}}»"
+    },
+    "schedule": {
+      "title": "Fechas y horarios",
+      "description": "Un evento puede durar un día o varios, con un horario común y ajustes por día.",
+      "mode": "Duración",
+      "single": "Un día",
+      "multi": "Varios días",
+      "date": "Fecha",
+      "start": "Empieza",
+      "end": "Termina",
+      "rangeStart": "Primer día",
+      "rangeEnd": "Último día",
+      "rangeHint": "Hasta {{max}} días",
+      "commonStart": "Horario común: empieza",
+      "commonEnd": "Horario común: termina",
+      "applyToAll": "Aplicar horario a todos",
+      "weekdays": "Solo estos días de la semana",
+      "allWeekdays": "Todos",
+      "daysCount_one": "{{count}} día",
+      "daysCount_other": "{{count}} días",
+      "daysMax": "máx. {{max}}",
+      "noDays": "No hay días: elige las fechas o añade uno.",
+      "addDay": "Añadir día",
+      "newDay": "Día nuevo",
+      "dayDate": "Fecha del día",
+      "dayStart": "Hora de inicio, {{day}}",
+      "dayEnd": "Hora de fin, {{day}}",
+      "removeDay": "Quitar {{day}}",
+      "endsNextDay": "Termina al día siguiente"
+    },
+    "place": {
+      "title": "Lugar",
+      "description": "Busca la dirección o haz clic en el mapa para situar el evento.",
+      "venue": "Nombre del lugar",
+      "venuePlaceholder": "Ej.: Teatro Campoamor",
+      "address": "Dirección",
+      "addressHint": "Escribe al menos 3 caracteres para ver sugerencias, o escríbela a mano.",
+      "searchPlaceholder": "Calle, número, localidad…",
+      "searching": "Buscando…",
+      "suggestions": "Sugerencias de dirección",
+      "noResults": "Sin resultados. Puedes escribir la dirección a mano y situarla en el mapa.",
+      "searchFailed": "La búsqueda de direcciones no responde. Puedes escribirla a mano.",
+      "searchUnavailable": "La búsqueda de direcciones no está disponible con tu sesión. Puedes escribirla a mano.",
+      "mapHint": "Haz clic en el mapa para colocar el marcador. Así el evento aparecerá en el mapa.",
+      "marker": "Ubicación del evento (arrastra para moverla)",
+      "coordinates": "Coordenadas:",
+      "clearPoint": "Quitar del mapa",
+      "noPoint": "Sin ubicación en el mapa. Te recomendamos situarlo para que aparezca en el mapa de eventos.",
+      "reverseLoading": "Buscando la dirección de ese punto…",
+      "reverseNotFound": "No hemos encontrado una dirección en ese punto: escríbela a mano.",
+      "reverseFailed": "No se ha podido obtener la dirección de ese punto: escríbela a mano."
+    },
+    "images": {
+      "title": "Imágenes",
+      "immediateNote": "Los cambios en las imágenes se guardan al momento.",
+      "deferredNote": "Las imágenes se subirán al publicar el evento.",
+      "cover": "Portada",
+      "rules": "JPEG, PNG o WebP · máx. 5 MB",
+      "coverAlt": "Portada del evento",
+      "coverHint": "Formato 16:9 recomendado",
+      "dropCover": "Arrastra una imagen o haz clic para elegirla",
+      "chooseCover": "Elegir imagen de portada",
+      "replace": "Cambiar",
+      "remove": "Quitar",
+      "replaceExternal": "Imagen enlazada. Sube una portada para sustituirla",
+      "externalUrl": "O enlaza una imagen (URL)",
+      "externalUrlHint": "Solo se usa si no subes una portada",
+      "clearExternal": "Quitar el enlace de la imagen",
+      "gallery": "Galería promocional",
+      "galleryHint": "Hasta 10 imágenes. Arrástralas o usa las flechas para ordenarlas.",
+      "chooseGallery": "Elegir imágenes de la galería",
+      "addGallery": "Añadir imágenes",
+      "galleryAlt": "Imagen {{n}} de la galería",
+      "removeN": "Quitar la imagen {{n}}",
+      "moveLeft": "Mover la imagen {{n}} a la izquierda",
+      "moveRight": "Mover la imagen {{n}} a la derecha",
+      "uploading": "Subiendo",
+      "errors": {
+        "type": "Formato no admitido (usa JPEG, PNG o WebP).",
+        "size": "La imagen supera los 5 MB.",
+        "galleryFull": "La galería ya tiene 10 imágenes."
+      }
+    },
+    "errors": {
+      "titleRequired": "El título es obligatorio.",
+      "tooLong": "Máximo {{max}} caracteres.",
+      "categoryRequired": "Elige una categoría.",
+      "invalidPrice": "Indica un precio válido (0 o más) o marca «Gratis».",
+      "invalidDate": "Indica una fecha válida.",
+      "invalidTime": "Indica la hora de inicio y de fin (HH:MM).",
+      "rangeOrder": "El último día no puede ser anterior al primero.",
+      "rangeSpan": "El evento puede durar como máximo {{max}} días.",
+      "noDays": "Añade al menos un día.",
+      "tooManySessions": "Como máximo {{max}} días.",
+      "duplicateSession": "Ya hay otro día con esta fecha y hora de inicio.",
+      "venueRequired": "Indica el nombre del lugar.",
+      "invalidUrl": "Debe ser un enlace http(s) válido.",
+      "imagesBusy": "Espera a que terminen de subirse las imágenes.",
+      "badRequest": "Revisa los datos del evento: {{message}}",
+      "unauthorized": "Tu sesión ha caducado.",
+      "loginAgain": "Inicia sesión en otra pestaña y vuelve a guardar",
+      "forbidden": "No tienes permiso para modificar este evento.",
+      "notFound": "Este evento ya no existe.",
+      "imageNotFound": "Esa imagen ya no existe. Recarga la página.",
+      "conflict": "Ya existe un evento igual.",
+      "network": "No hay conexión con el servidor. Inténtalo de nuevo.",
+      "generic": "No se ha podido guardar. Inténtalo de nuevo."
+    }
   }
 }

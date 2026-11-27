@@ -5,12 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { Ticket } from "lucide-react";
-import { signIn } from "@/lib/better-auth/client";
-
-// Only follow same-site paths, so ?redirect= can't send users to another domain
-function safeRedirect(target: string | null): string {
-  return target && /^\/(?![/\\])/.test(target) ? target : "/";
-}
+import { clearApiToken, signIn } from "@/lib/better-auth/client";
+import { homeForRole, safeRedirect } from "@/lib/better-auth/redirect";
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -24,13 +20,17 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await signIn.email({ email: email.trim(), password });
+    const { data, error } = await signIn.email({ email: email.trim(), password });
     if (error) {
       setError(error.status === 401 ? t("login.wrongCredentials") : t("login.genericError"));
       setLoading(false);
       return;
     }
-    router.push(safeRedirect(new URLSearchParams(window.location.search).get("redirect")));
+    // A JWT cached for a previous session would carry the wrong user and role
+    clearApiToken();
+    // ?redirect= wins; otherwise publishers land on their events and everyone else on the home page
+    const target = new URLSearchParams(window.location.search).get("redirect");
+    router.push(safeRedirect(target, homeForRole(data?.user.role)));
     router.refresh();
   }
 

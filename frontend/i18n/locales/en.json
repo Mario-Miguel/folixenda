@@ -54,12 +54,21 @@
     "notifications": "Notifications",
     "language": "Language",
     "login": "Sign in",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "profile": "Profile",
+    "myPublications": "My listings"
   },
   "myEvents": {
     "noSavedEvents": "You have no upcoming saved events",
     "browseEvents": "Discover events to save",
     "loadError": "Couldn't load your saved events"
+  },
+  "display": {
+    "dayOfTotal": "Day {{day}} of {{total}}",
+    "dayOfTotalShort": "{{day}}/{{total}}",
+    "multiDay": "{{count}} days",
+    "variableSchedule": "Varying hours",
+    "endsNextDay": "+1 day"
   },
   "event": {
     "backToEvents": "Back to events",
@@ -78,7 +87,24 @@
     "shareError": "Couldn't copy the link",
     "saveForLater": "Save for later",
     "saved": "Saved",
-    "moreCategoryEvents": "More {{category}} events"
+    "moreCategoryEvents": "More {{category}} events",
+    "backToPublisher": "Back to my listings",
+    "organizedBy": "Organized by",
+    "website": "Website",
+    "phone": "Phone",
+    "youArePublisher": "You published this event.",
+    "editInPublisher": "Edit event",
+    "datesAndTimes": "Dates and times",
+    "sessionEnded": "Past",
+    "nextSession": "Next",
+    "endsNextDay": "ends the next day",
+    "gallery": "Gallery",
+    "galleryImageAlt": "{{title}}, image {{index}} of {{total}}",
+    "openImage": "Open image {{index}} of {{total}}",
+    "closeGallery": "Close gallery",
+    "previousImage": "Previous image",
+    "nextImage": "Next image",
+    "imageCounter": "{{index}} / {{total}}"
   },
   "admin": {
     "access": "Admin access",
@@ -109,7 +135,8 @@
       "end": "End",
       "venue": "Venue",
       "address": "Address",
-      "artistHost": "Artist / Host (optional)"
+      "artistHost": "Artist / Host (optional)",
+      "owner": "Owner"
     },
     "roles": {
       "admin": "admin",
@@ -124,6 +151,7 @@
       "confirmDelete": "Delete user \"{{name}}\"? Their account, sessions and saved events will be deleted. This can't be undone.",
       "deleted": "User deleted.",
       "deleteFailed": "Failed to delete user.",
+      "accountTypeFixed": "The account type (person or company) can't be changed: using the other type needs a new account. Admin can still be granted or removed.",
       "deleteSelf": "You can't delete your own user.",
       "notFound": "This user no longer exists.",
       "updated": "User updated.",
@@ -139,7 +167,150 @@
       "updated": "Event updated.",
       "updateFailed": "Failed to update event.",
       "created": "Event created.",
-      "createFailed": "Failed to create event."
+      "createFailed": "Failed to create event.",
+      "ownerPublisher": "Publisher {{id}}",
+      "ownerScraped": "No publisher"
+    }
+  },
+  "publisher": {
+    "title": "My listings",
+    "subtitle": "Manage the events published by {{org}}",
+    "newEvent": "New event",
+    "editEvent": "Edit event",
+    "loadError": "Couldn't load your listings",
+    "profileBanner": "Complete your organization details so they appear on your events",
+    "profileBannerLink": "Complete profile",
+    "adminNote": {
+      "title": "You're an admin",
+      "text": "Admin accounts manage every event from the admin dashboard.",
+      "link": "Go to the admin dashboard"
+    },
+    "consumerCard": {
+      "title": "This area is for organizers",
+      "text": "\"My listings\" is for company and platform accounts that publish their own events. With your personal account you can save the events you're interested in.",
+      "profileLink": "Go to my profile",
+      "myEventsLink": "See my saved events"
+    },
+    "stats": {
+      "upcoming": "Upcoming",
+      "saves": "Total saves",
+      "past": "Past"
+    },
+    "tabs": {
+      "upcoming": "Upcoming",
+      "past": "Past"
+    },
+    "savedBy_zero": "Nobody has saved it yet",
+    "savedBy_one": "Saved by {{count}} person",
+    "savedBy_other": "Saved by {{count}} people",
+    "ended": "Ended",
+    "viewPublic": "View public page",
+    "confirmDelete": "Delete \"{{title}}\"? It will no longer be shown on folixenda and its saves will be lost. This can't be undone.",
+    "created": "Event published.",
+    "updated": "Event updated.",
+    "deleted": "Event deleted.",
+    "empty": {
+      "firstTitle": "Publish your first event",
+      "firstText": "Create an event and it will show up on the folixenda calendar and map.",
+      "firstCta": "Create my first event",
+      "noUpcoming": "You have no upcoming events.",
+      "noPast": "You have no past events yet."
+    },
+    "errors": {
+      "unauthorized": "Your session has expired. Please log in again.",
+      "forbidden": "You can only change events you published.",
+      "badRequest": "Check the event details: {{message}}",
+      "notFound": "This event no longer exists.",
+      "createFailed": "Couldn't create the event.",
+      "updateFailed": "Couldn't update the event.",
+      "deleteFailed": "Couldn't delete the event."
+    }
+  },
+  "profile": {
+    "title": "My profile",
+    "subtitle": "Manage your account, preferences and security",
+    "loadError": "We couldn't load some of your profile data. Reload the page to try again.",
+    "optional": "(optional)",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "saved": "Changes saved.",
+    "errors": {
+      "unauthorized": "Your session has expired. Please sign in again.",
+      "forbidden": "You don't have permission to do this.",
+      "badRequest": "Some of the data isn't valid. Check it and try again.",
+      "wrongPassword": "The password is incorrect.",
+      "passwordTooLong": "The password is too long.",
+      "generic": "Something went wrong. Please try again."
+    },
+    "account": {
+      "title": "Account",
+      "type": "Account type",
+      "memberSince": "Member since",
+      "typeFixed": "The account type can't be changed. To use folixenda both as a person and as a company, create a separate account (with another email) for each.",
+      "emailReadOnly": "The email address can't be changed.",
+      "nameRequired": "The name can't be empty.",
+      "roles": {
+        "consumer": "Person",
+        "publisher": "Company",
+        "admin": "Admin"
+      }
+    },
+    "org": {
+      "title": "Organization",
+      "subtitle": "These details are shown next to the events you publish.",
+      "orgName": "Organization name",
+      "website": "Website",
+      "phone": "Phone",
+      "description": "Description",
+      "incompleteTitle": "Complete your organization details",
+      "incompleteBody": "Add at least your organization's name so it shows on your events.",
+      "incompleteAfterSignup": "Your account was created, but we couldn't save your organization details. Complete them here to start publishing.",
+      "errors": {
+        "orgName": "The name must be between {{min}} and {{max}} characters.",
+        "website": "Enter a URL starting with http:// or https://.",
+        "phone": "Up to {{max}} characters: only digits, spaces and + - ( ) .",
+        "description": "The description can't be longer than {{max}} characters."
+      }
+    },
+    "notifications": {
+      "title": "Notifications",
+      "subtitle": "Choose what you'd like us to tell you about.",
+      "comingSoon": "We don't send emails yet. We store your preferences and will soon notify you based on what you choose here.",
+      "savedEventReminders": "Reminders for saved events",
+      "savedEventRemindersHint": "A heads-up before the events you've saved.",
+      "categoryNews": "News from your favourite categories",
+      "categoryNewsHint": "New events in the categories you pick.",
+      "favouriteCategories": "Favourite categories",
+      "noCategories": "Pick at least one category to get news.",
+      "newsletter": "folixenda newsletter",
+      "newsletterHint": "Occasional news about folixenda.",
+      "publisherActivity": "Activity on my events",
+      "publisherActivityHint": "For example, when someone saves one of your events."
+    },
+    "security": {
+      "title": "Security",
+      "subtitle": "Change your password.",
+      "currentPassword": "Current password",
+      "newPassword": "New password",
+      "otherSessions": "Changing it signs you out on all your other devices.",
+      "change": "Change password",
+      "changed": "Password updated."
+    },
+    "danger": {
+      "title": "Danger zone",
+      "subtitle": "Permanently delete your account.",
+      "whatIsDeleted": "This will delete:",
+      "items": {
+        "account": "Your account, sign-in details and sessions.",
+        "saved": "Your saved events.",
+        "preferences": "Your notification preferences.",
+        "publisher": "Your organization details and every event you've published."
+      },
+      "irreversible": "This can't be undone.",
+      "confirmWord": "DELETE",
+      "typeToConfirm": "Type {{word}} to confirm",
+      "delete": "Delete my account",
+      "deleting": "Deleting…"
     }
   },
   "login": {
@@ -166,6 +337,172 @@
     "passwordMismatch": "Passwords don't match.",
     "passwordTooShort": "Password must be at least {{min}} characters.",
     "emailTaken": "An account with that email already exists.",
-    "invalidEmail": "The email address is not valid."
+    "invalidEmail": "The email address is not valid.",
+    "subtitlePublisher": "Publish and manage your organization's events",
+    "contactName": "Contact person's name",
+    "orgSection": "Organization details",
+    "orgSectionHint": "Shown next to the events you publish. You can change them in your profile.",
+    "accountType": {
+      "label": "Account type",
+      "permanent": "You can't change it later: using the other type needs another account.",
+      "consumer": "Person",
+      "consumerHint": "Discover and save events",
+      "publisher": "Company or platform",
+      "publisherHint": "Publish your events"
+    }
+  },
+  "editor": {
+    "newTitle": "New event",
+    "editTitle": "Edit event",
+    "backToPublisher": "My publications",
+    "backToAdmin": "Admin dashboard",
+    "leaveConfirm": "You have unsaved changes. Leave anyway?",
+    "access": {
+      "onlyPublishersTitle": "Organizers only",
+      "onlyPublishersText": "Creating and editing events is available to company and platform accounts.",
+      "notOwnerTitle": "You can't edit this event",
+      "notOwnerText": "You can only change events you published yourself.",
+      "loadErrorTitle": "The event couldn't be loaded",
+      "loadErrorText": "Please try again in a moment.",
+      "backHome": "Back to home"
+    },
+    "notice": {
+      "created": "Event created.",
+      "uploadsFailed_one": "{{count}} image couldn't be uploaded. You can try again below:",
+      "uploadsFailed_other": "{{count}} images couldn't be uploaded. You can try again below:"
+    },
+    "bar": {
+      "save": "Save changes",
+      "publish": "Publish event",
+      "saveAndView": "Save and view",
+      "saving": "Saving the event…",
+      "uploading": "Uploading images ({{done}}/{{total}})…",
+      "unsaved": "Unsaved changes",
+      "noChanges": "No changes"
+    },
+    "info": {
+      "title": "Details",
+      "name": "Title",
+      "namePlaceholder": "E.g. Jazz concert at the Campoamor",
+      "category": "Category",
+      "categoryPlaceholder": "Choose a category",
+      "description": "Description",
+      "descriptionPlaceholder": "Tell people what the event is about, who it's for…",
+      "artist": "Artist or performer",
+      "artistHint": "Optional",
+      "price": "Price",
+      "free": "Free",
+      "perks": "Perks",
+      "perksHint": "Press Enter or comma to add each one (max {{max}})",
+      "perksPlaceholder": "E.g. Parking, Accessible…",
+      "removePerk": "Remove “{{perk}}”"
+    },
+    "schedule": {
+      "title": "Dates and times",
+      "description": "An event can last one day or several, with a common schedule and per-day adjustments.",
+      "mode": "Duration",
+      "single": "One day",
+      "multi": "Several days",
+      "date": "Date",
+      "start": "Starts",
+      "end": "Ends",
+      "rangeStart": "First day",
+      "rangeEnd": "Last day",
+      "rangeHint": "Up to {{max}} days",
+      "commonStart": "Common schedule: starts",
+      "commonEnd": "Common schedule: ends",
+      "applyToAll": "Apply schedule to all",
+      "weekdays": "Only these weekdays",
+      "allWeekdays": "All",
+      "daysCount_one": "{{count}} day",
+      "daysCount_other": "{{count}} days",
+      "daysMax": "max {{max}}",
+      "noDays": "No days: pick the dates or add one.",
+      "addDay": "Add day",
+      "newDay": "New day",
+      "dayDate": "Day date",
+      "dayStart": "Start time, {{day}}",
+      "dayEnd": "End time, {{day}}",
+      "removeDay": "Remove {{day}}",
+      "endsNextDay": "Ends the next day"
+    },
+    "place": {
+      "title": "Venue",
+      "description": "Search for the address or click the map to place the event.",
+      "venue": "Venue name",
+      "venuePlaceholder": "E.g. Teatro Campoamor",
+      "address": "Address",
+      "addressHint": "Type at least 3 characters to see suggestions, or type it by hand.",
+      "searchPlaceholder": "Street, number, town…",
+      "searching": "Searching…",
+      "suggestions": "Address suggestions",
+      "noResults": "No results. You can type the address by hand and place it on the map.",
+      "searchFailed": "Address search isn't responding. You can type it by hand.",
+      "searchUnavailable": "Address search isn't available for your session. You can type it by hand.",
+      "mapHint": "Click the map to place the marker, so the event shows up on the map.",
+      "marker": "Event location (drag to move it)",
+      "coordinates": "Coordinates:",
+      "clearPoint": "Remove from map",
+      "noPoint": "Not on the map yet. We recommend placing it so it appears on the events map.",
+      "reverseLoading": "Looking up the address of that point…",
+      "reverseNotFound": "No address found at that point: please type it.",
+      "reverseFailed": "Couldn't get the address of that point: please type it."
+    },
+    "images": {
+      "title": "Images",
+      "immediateNote": "Image changes are saved immediately.",
+      "deferredNote": "Images are uploaded when you publish the event.",
+      "cover": "Cover",
+      "rules": "JPEG, PNG or WebP · max 5 MB",
+      "coverAlt": "Event cover",
+      "coverHint": "16:9 format recommended",
+      "dropCover": "Drag an image here or click to choose one",
+      "chooseCover": "Choose cover image",
+      "replace": "Replace",
+      "remove": "Remove",
+      "replaceExternal": "Linked image. Upload a cover to replace it",
+      "externalUrl": "Or link an image (URL)",
+      "externalUrlHint": "Only used if you don't upload a cover",
+      "clearExternal": "Remove the image link",
+      "gallery": "Promotional gallery",
+      "galleryHint": "Up to 10 images. Drag them or use the arrows to reorder.",
+      "chooseGallery": "Choose gallery images",
+      "addGallery": "Add images",
+      "galleryAlt": "Gallery image {{n}}",
+      "removeN": "Remove image {{n}}",
+      "moveLeft": "Move image {{n}} left",
+      "moveRight": "Move image {{n}} right",
+      "uploading": "Uploading",
+      "errors": {
+        "type": "Unsupported format (use JPEG, PNG or WebP).",
+        "size": "The image is larger than 5 MB.",
+        "galleryFull": "The gallery already has 10 images."
+      }
+    },
+    "errors": {
+      "titleRequired": "The title is required.",
+      "tooLong": "Max {{max}} characters.",
+      "categoryRequired": "Choose a category.",
+      "invalidPrice": "Enter a valid price (0 or more) or tick “Free”.",
+      "invalidDate": "Enter a valid date.",
+      "invalidTime": "Enter the start and end time (HH:MM).",
+      "rangeOrder": "The last day can't be before the first one.",
+      "rangeSpan": "An event can last at most {{max}} days.",
+      "noDays": "Add at least one day.",
+      "tooManySessions": "At most {{max}} days.",
+      "duplicateSession": "Another day already has this date and start time.",
+      "venueRequired": "Enter the venue name.",
+      "invalidUrl": "Must be a valid http(s) link.",
+      "imagesBusy": "Wait until the images finish uploading.",
+      "badRequest": "Check the event details: {{message}}",
+      "unauthorized": "Your session has expired.",
+      "loginAgain": "Sign in in another tab and save again",
+      "forbidden": "You're not allowed to change this event.",
+      "notFound": "This event no longer exists.",
+      "imageNotFound": "That image no longer exists. Reload the page.",
+      "conflict": "An identical event already exists.",
+      "network": "Can't reach the server. Please try again.",
+      "generic": "Couldn't save. Please try again."
+    }
   }
 }
