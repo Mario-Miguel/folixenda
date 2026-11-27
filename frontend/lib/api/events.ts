@@ -1,8 +1,17 @@
 import { ApiEventsResponse, Event } from "../types";
 import { apiClient } from "./api";
 
-export async function getEvents(params?: { date?: string; category?: string }): Promise<ApiEventsResponse> {
-  const { data } = await apiClient.get<ApiEventsResponse>("/events", { params });
+export interface EventsQuery {
+  date?: string; // YYYY-MM-DD: events on this day
+  from?: string; // YYYY-MM-DD, inclusive range start (use with `to`)
+  to?: string; // YYYY-MM-DD, inclusive range end
+  category?: string; // omit (or "All") for every category
+}
+
+export async function getEvents(params?: EventsQuery): Promise<ApiEventsResponse> {
+  // "All" is a UI-only filter value: don't send it to the API
+  const query = params?.category === "All" ? { ...params, category: undefined } : params;
+  const { data } = await apiClient.get<ApiEventsResponse>("/events", { params: query });
   return data;
 }
 

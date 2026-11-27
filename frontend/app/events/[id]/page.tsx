@@ -1,25 +1,19 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Clock, MapPin, Calendar, ChevronLeft, Star, Share2 } from "lucide-react";
+import { Clock, MapPin, Calendar, ChevronLeft, Star } from "lucide-react";
 import { getEvent, getEvents } from "@/lib/api/events";
 import EventCard from "@/components/EventCard";
 import EventImage from "@/components/EventImage";
 import { formatLongDate } from "@/i18n/format";
 import { getTranslation } from "@/i18n/server";
 import SaveEventButton from "@/components/SaveEventButton";
+import ShareButton from "@/components/ShareButton";
 import { isEventSaved } from "@/lib/api/userSavedEvents";
 import { getServerApiToken } from "@/lib/better-auth/server-token";
 import { Event } from "@/lib/types";
+import { categoryBadgeClass } from "@/lib/categories";
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Music: "bg-purple-100 text-purple-700",
-  Theater: "bg-blue-100 text-blue-700",
-  Parties: "bg-pink-100 text-pink-700",
-  Sports: "bg-green-100 text-green-700",
-  Food: "bg-yellow-100 text-yellow-700",
-  Art: "bg-rose-100 text-rose-700",
-  Wellness: "bg-teal-100 text-teal-700",
-};
+const RELATED_COUNT = 3;
 
 // Pages that link here with ?from=<key>, so "back" returns to them. Whitelisted to avoid arbitrary redirects.
 const BACK_LINKS = {
@@ -46,16 +40,21 @@ export default async function EventDetailPage({
     notFound();
   }
 
-  const [{ events: allEvents }, saved] = await Promise.all([
-    getEvents({ category: event.category }),
-    // A failing saved-events lookup shouldn't break the page; show it as not saved
-    getServerApiToken()
-      .then((token) => isEventSaved(event.id, token))
-      .catch(() => false),
-  ]);
-  const related = allEvents.filter((e) => e.id !== event.id).slice(0, 3);
+  // Saved state of the event and of each related card, one small per-event lookup each.
+  // A failing lookup shouldn't break the page: show that event as not saved.
+  // Without a session nothing is saved, so skip the requests entirely.
+  const token = await getServerApiToken();
+  const savedState = (eventId: string) =>
+    token ? isEventSaved(eventId, token).catch(() => false) : Promise.resolve(false);
 
-  const categoryColor = CATEGORY_COLORS[event.category] ?? "bg-gray-100 text-gray-600";
+  const [{ events: categoryEvents }, saved] = await Promise.all([
+    getEvents({ category: event.category }).catch(() => ({ events: [] as Event[] })),
+    savedState(event.id),
+  ]);
+  const related = categoryEvents.filter((e) => e.id !== event.id).slice(0, RELATED_COUNT);
+  const relatedSaved = await Promise.all(related.map((e) => savedState(e.id)));
+
+  const categoryColor = categoryBadgeClass(event.category);
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
@@ -73,12 +72,7 @@ export default async function EventDetailPage({
         {/* Gradient background shows through when there is no image or it fails to load */}
         <EventImage src={event.imageUrl} alt={event.title} className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute top-4 right-4 flex gap-2">
-          <button
-            aria-label={t("event.share")}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/80 backdrop-blur-sm text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            <Share2 className="w-4 h-4" />
-          </button>
+          <ShareButton title={event.title} />
           <SaveEventButton eventId={event.id} saved={saved} variant="icon" />
         </div>
         <div className="absolute bottom-4 left-4">
@@ -176,19 +170,10 @@ export default async function EventDetailPage({
               {event.price > 0 && <p className="text-xs text-gray-400 mt-0.5">{t("event.perPerson")}</p>}
             </div>
 
-            <div
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium mb-5"
-              style={{ backgroundColor: "#fff3ed", color: "#ec5b13" }}
-            >
-              {t("event.sellingFast")}
-            </div>
-
-            <button
-              className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#ec5b13" }}
-            >
-              {event.price === 0 ? t("event.registerFree") : t("common.getTickets")}
-            </button>
+            {/* No ticket link in the event data yet, so no "buy" button: just say where tickets are handled */}
+            <p className="text-sm text-gray-500 leading-relaxed">
+              {event.price === 0 ? t("event.freeEntryInfo") : t("event.ticketsInfo")}
+            </p>
 
             <SaveEventButton eventId={event.id} saved={saved} />
           </div>
@@ -202,8 +187,8 @@ export default async function EventDetailPage({
             {t("event.moreCategoryEvents", { category: t(`categories.${event.category}`) })}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {related.map((e) => (
-              <EventCard key={e.id} event={e} />
+            {related.map((e, i) => (
+              <EventCard key={e.id} event={e} saved={relatedSaved[i]} />
             ))}
           </div>
         </section>

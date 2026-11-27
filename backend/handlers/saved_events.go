@@ -3,12 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
+
+	"github.com/google/uuid"
 
 	"github.com/Mario-Miguel/folixenda/backend/models"
 	"github.com/Mario-Miguel/folixenda/backend/store"
-	"github.com/google/uuid"
 )
 
 type SavedEventsHandler struct {
@@ -19,16 +19,17 @@ func NewSavedEventsHandler(s store.UserSavedEventStore) *SavedEventsHandler {
 	return &SavedEventsHandler{store: s}
 }
 
-func (h *SavedEventsHandler) Register(mux *http.ServeMux, protect func(h http.Handler) http.Handler) {
-	mux.Handle("GET /api/savedEvents", protect(http.HandlerFunc(h.get)))
-	mux.Handle("POST /api/savedEvents", protect(http.HandlerFunc(h.create)))
-	mux.Handle("DELETE /api/savedEvents/{eventId}", protect(http.HandlerFunc(h.delete)))
+// Register mounts the saved-events routes. All act on the token's user.
+func (h *SavedEventsHandler) Register(mux *http.ServeMux, protect Middleware) {
+	mux.Handle("GET /api/savedEvents", chain(h.get, protect))
+	mux.Handle("GET /api/savedEvents/{eventId}", chain(h.isSaved, protect))
+	mux.Handle("POST /api/savedEvents", chain(h.create, protect))
+	mux.Handle("DELETE /api/savedEvents/{eventId}", chain(h.delete, protect))
 }
 
 func (h *SavedEventsHandler) get(w http.ResponseWriter, r *http.Request) {
 	claims := GetClaimsFromRequest(w, r)
-
-	if claims == nil || claims.Subject == "" {
+	if claims == nil {
 		return
 	}
 
@@ -44,41 +45,65 @@ func (h *SavedEventsHandler) get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, savedEvents)
 }
 
-func (h *SavedEventsHandler) create(w http.ResponseWriter, r *http.Request) {
-	var userSavedEvent models.UserSavedEvent
-	claims := GetClaimsFromRequest(w, r)
+type isSavedResponse struct {
+	Saved bool `json:"saved"`
+}
 
-	if claims == nil || claims.Subject == "" {
+// isSaved handles GET /api/savedEvents/{eventId} → {"saved": bool}.
+func (h *SavedEventsHandler) isSaved(w http.ResponseWriter, r *http.Request) {
+	claims := GetClaimsFromRequest(w, r)
+	if claims == nil {
+		return
+	}
+	saved, err := h.store.IsSaved(claims.Subject, r.PathValue("eventId"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to check saved event")
+		return
+	}
+	writeJSON(w, http.StatusOK, isSavedResponse{Saved: saved})
+}
+
+func (h *SavedEventsHandler) create(w http.ResponseWriter, r *http.Request) {
+	claims := GetClaimsFromRequest(w, r)
+	if claims == nil {
 		return
 	}
 
+	var userSavedEvent models.UserSavedEvent
 	if err := json.NewDecoder(r.Body).Decode(&userSavedEvent); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-
+	if userSavedEvent.EventId == "" {
+		writeError(w, http.StatusBadRequest, "eventId is required")
+		return
+	}
 	if userSavedEvent.ID == "" {
 		userSavedEvent.ID = uuid.New().String()
 	}
-
 	userSavedEvent.UserId = claims.Subject
 
 	if err := h.store.Create(&userSavedEvent); err != nil {
-		writeError(w, http.StatusConflict, fmt.Sprintf("could not create saved event: %v", err))
+		switch {
+		case errors.Is(err, store.ErrConflict):
+			writeError(w, http.StatusConflict, "event already saved")
+		case errors.Is(err, store.ErrNotFound):
+			writeError(w, http.StatusNotFound, "event not found")
+		default:
+			writeError(w, http.StatusInternalServerError, "failed to save event")
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, userSavedEvent)
 }
 
 func (h *SavedEventsHandler) delete(w http.ResponseWriter, r *http.Request) {
-	eventId := r.PathValue("eventId")
 	claims := GetClaimsFromRequest(w, r)
-
-	if claims == nil || claims.Subject == "" {
+	if claims == nil {
 		return
 	}
 
-	if err := h.store.Delete(claims.Subject, eventId); err != nil {
+	if err := h.store.Delete(claims.Subject, r.PathValue("eventId")); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "event not found")
 			return

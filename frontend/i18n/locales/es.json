@@ -30,7 +30,9 @@
     "approximateLocation": "Ubicación aproximada",
     "previousMonth": "Mes anterior",
     "nextMonth": "Mes siguiente",
-    "moreCount": "+{{count}} más"
+    "moreCount": "+{{count}} más",
+    "loadEventsError": "No se han podido cargar los eventos",
+    "retry": "Reintentar"
   },
   "categories": {
     "All": "Todos",
@@ -70,8 +72,10 @@
     "whatsIncluded": "Qué incluye",
     "price": "Precio",
     "perPerson": "por persona",
-    "sellingFast": "🔥 Se agotan rápido",
-    "registerFree": "Inscríbete gratis",
+    "ticketsInfo": "La venta de entradas la gestiona el organizador o el propio lugar del evento.",
+    "freeEntryInfo": "Entrada gratuita. Consulta con el organizador si hace falta inscribirse.",
+    "linkCopied": "Enlace copiado",
+    "shareError": "No se ha podido copiar el enlace",
     "saveForLater": "Guardar para después",
     "saved": "Guardado",
     "moreCategoryEvents": "Más eventos de {{category}}"
@@ -79,10 +83,11 @@
   "admin": {
     "access": "Acceso de administrador",
     "noAdminAccess": "Esta cuenta no tiene acceso de administrador.",
-    "wrongCredentials": "Usuario o contraseña incorrectos.",
-    "genericError": "Algo ha ido mal. Inténtalo de nuevo.",
-    "signIn": "Iniciar sesión",
-    "signingIn": "Iniciando sesión…",
+    "backHome": "Volver al inicio",
+    "errors": {
+      "forbidden": "No tienes permiso para realizar esta acción.",
+      "unauthorized": "Tu sesión ha caducado. Vuelve a iniciar sesión."
+    },
     "dashboard": "Panel de administración",
     "loggedInAs": "Sesión iniciada como {{name}}",
     "logOut": "Cerrar sesión",
@@ -92,11 +97,8 @@
     },
     "fields": {
       "name": "Nombre",
-      "username": "Usuario",
       "email": "Correo electrónico",
       "role": "Rol",
-      "password": "Contraseña",
-      "newPassword": "Nueva contraseña (déjala vacía para mantenerla)",
       "title": "Título",
       "description": "Descripción",
       "category": "Categoría",
@@ -117,19 +119,20 @@
     "users": {
       "count_one": "{{count}} usuario",
       "count_other": "{{count}} usuarios",
-      "new": "Nuevo usuario",
       "edit": "Editar usuario",
-      "confirmDelete": "¿Eliminar el usuario \"{{name}}\"?",
+      "loadFailed": "No se pudieron cargar los usuarios.",
+      "confirmDelete": "¿Eliminar el usuario \"{{name}}\"? Se borrarán su cuenta, sus sesiones y sus eventos guardados. No se puede deshacer.",
       "deleted": "Usuario eliminado.",
       "deleteFailed": "No se pudo eliminar el usuario.",
+      "deleteSelf": "No puedes eliminar tu propio usuario.",
+      "notFound": "El usuario ya no existe.",
       "updated": "Usuario actualizado.",
-      "updateFailed": "No se pudo actualizar el usuario.",
-      "created": "Usuario creado.",
-      "createFailed": "No se pudo crear el usuario."
+      "updateFailed": "No se pudo actualizar el usuario."
     },
     "events": {
       "new": "Nuevo evento",
       "edit": "Editar evento",
+      "loadFailed": "No se pudieron cargar los eventos.",
       "confirmDelete": "¿Eliminar el evento \"{{title}}\"?",
       "deleted": "Evento eliminado.",
       "deleteFailed": "No se pudo eliminar el evento.",

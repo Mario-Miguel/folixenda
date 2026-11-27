@@ -13,31 +13,17 @@ type UserSavedEventStore interface {
 	Create(se *models.UserSavedEvent) error
 	Delete(userId string, eventId string) error
 	DeleteById(id string) error
+	IsSaved(userID, eventID string) (bool, error)
 }
 
 type UserSavedEventStoreDBConnection struct {
 	db *sql.DB
 }
 
-func NewUserSavedEventsStore(db *sql.DB) (*UserSavedEventStoreDBConnection, error) {
-	s := &UserSavedEventStoreDBConnection{db: db}
-	if err := s.migrate(); err != nil {
-		return nil, err
-	}
-	return s, nil
-}
-
-func (s *UserSavedEventStoreDBConnection) migrate() error {
-	_, err := s.db.Exec(`
-		CREATE TABLE IF NOT EXISTS user_saved_events (
-			id                TEXT PRIMARY KEY,
-			user_id           TEXT NOT NULL REFERENCES users(id),
-			event_id          TEXT NOT NULL REFERENCES events(id),
-			created_at		  TIMESTAMP DEFAULT now(),
-			UNIQUE (user_id, event_id)
-		)
-	`)
-	return err
+// NewUserSavedEventsStore returns a store backed by db. The schema is created by the
+// migrations in backend/migrations, not here.
+func NewUserSavedEventsStore(db *sql.DB) *UserSavedEventStoreDBConnection {
+	return &UserSavedEventStoreDBConnection{db: db}
 }
 
 func (s *UserSavedEventStoreDBConnection) List() ([]*models.UserSavedEvents, error) {
@@ -128,7 +114,16 @@ func (s *UserSavedEventStoreDBConnection) Create(se *models.UserSavedEvent) erro
 		INSERT INTO user_saved_events (id, user_id, event_id)
 		VALUES ($1,$2,$3)
 	`, se.ID, se.UserId, se.EventId)
-	return err
+	return translateError(err)
+}
+
+// IsSaved reports whether userID has saved eventID.
+func (s *UserSavedEventStoreDBConnection) IsSaved(userID, eventID string) (bool, error) {
+	var saved bool
+	err := s.db.QueryRow(`
+		SELECT EXISTS (SELECT 1 FROM user_saved_events WHERE user_id=$1 AND event_id=$2)
+	`, userID, eventID).Scan(&saved)
+	return saved, err
 }
 
 func (s *UserSavedEventStoreDBConnection) DeleteById(id string) error {
@@ -146,7 +141,7 @@ func (s *UserSavedEventStoreDBConnection) DeleteById(id string) error {
 func (s *UserSavedEventStoreDBConnection) Delete(userId string, eventId string) error {
 	result, err := s.db.Exec(`DELETE FROM user_saved_events WHERE user_id=$1 AND event_id=$2`, userId, eventId)
 	if err != nil {
-		return err
+		return translateError(err)
 	}
 	n, _ := result.RowsAffected()
 	if n == 0 {

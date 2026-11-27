@@ -1,20 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { MapPin, Clock, Bookmark, BookmarkCheck, Plus } from "lucide-react";
+import { MapPin, Clock, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Event } from "@/lib/types";
 import EventImage from "@/components/EventImage";
-
-export const CATEGORY_COLORS: Record<string, string> = {
-  Music: "bg-purple-100 text-purple-700",
-  Theater: "bg-blue-100 text-blue-700",
-  Parties: "bg-pink-100 text-pink-700",
-  Sports: "bg-green-100 text-green-700",
-  Food: "bg-yellow-100 text-yellow-700",
-  Art: "bg-rose-100 text-rose-700",
-  Wellness: "bg-teal-100 text-teal-700",
-};
+import SaveEventButton from "@/components/SaveEventButton";
+import { categoryBadgeClass } from "@/lib/categories";
 
 interface EventCardProps {
   event: Event;
@@ -30,13 +22,16 @@ interface EventCardProps {
   onSelect?: () => void;
   // Overrides the event page link (e.g. to add ?from=... for the back button)
   href?: string;
+  // Detailed media card only: whether the current user saved the event. When given, a working
+  // bookmark button is shown; the parent fetches this once for the whole list.
+  saved?: boolean;
 }
 
-function formatShortDate(date: string): string {
+function formatShortDate(date: string, locale: string): string {
   // Parse as local date: "YYYY-MM-DD" alone would be read as UTC midnight
   const d = new Date(`${date}T00:00:00`);
   if (Number.isNaN(d.getTime())) return date;
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return d.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" });
 }
 
 export default function EventCard({
@@ -47,9 +42,10 @@ export default function EventCard({
   selected = false,
   onSelect,
   href: hrefOverride,
+  saved,
 }: EventCardProps) {
-  const { t } = useTranslation();
-  const categoryColor = CATEGORY_COLORS[event.category] ?? "bg-gray-100 text-gray-600";
+  const { t, i18n } = useTranslation();
+  const categoryColor = categoryBadgeClass(event.category);
   const href = hrefOverride ?? `/events/${event.id}`;
 
   if (compact) {
@@ -126,7 +122,7 @@ export default function EventCard({
   }
 
   const mediaHeight = detailed ? "h-40" : "h-32";
-  const when = [event.date && formatShortDate(event.date), [event.startTime, event.endTime].filter(Boolean).join(" - ")]
+  const when = [event.date && formatShortDate(event.date, i18n.language), [event.startTime, event.endTime].filter(Boolean).join(" - ")]
     .filter(Boolean)
     .join(" · ");
 
@@ -148,18 +144,18 @@ export default function EventCard({
           />
           {detailed && (
             <>
-              <div className="absolute top-3 right-3 flex gap-2">
-                <button
-                  onClick={(e) => e.preventDefault()}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/80 backdrop-blur-sm text-gray-600 hover:text-primary transition-colors"
+              {saved !== undefined && (
+                // The card is a link: keep bookmark clicks from navigating to the event
+                <div
+                  className="absolute top-3 right-3 flex gap-2"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
                 >
-                  {event.isSaved ? (
-                    <BookmarkCheck className="w-4 h-4" style={{ color: "#ec5b13" }} />
-                  ) : (
-                    <Bookmark className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
+                  <SaveEventButton eventId={event.id} saved={saved} variant="icon" />
+                </div>
+              )}
               <div className="absolute bottom-3 left-3">
                 <span className={`text-xs font-medium px-2.5 py-1 rounded-full bg-white/90 ${categoryColor}`}>
                   {t(`categories.${event.category}`)}
@@ -193,7 +189,7 @@ export default function EventCard({
           {approximateLocation && (
             <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
               <MapPin className="w-3.5 h-3.5 shrink-0" />
-              <span>Approximate location</span>
+              <span>{t("common.approximateLocation")}</span>
             </div>
           )}
         </div>

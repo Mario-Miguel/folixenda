@@ -6,17 +6,15 @@ import { getTranslation } from "@/i18n/server";
 import { getSavedEvents } from "@/lib/api/userSavedEvents";
 import { getServerApiToken } from "@/lib/better-auth/server-token";
 import { SavedEvent } from "@/lib/types";
-
-// An event counts as past once its end time has gone by (server local time)
-function hasEnded(event: SavedEvent, now: Date) {
-  return new Date(`${event.date}T${event.endTime || "23:59"}`) < now;
-}
+import { hasEventEnded } from "@/lib/dates";
 
 // Upcoming events sorted by date and start time, grouped by day
 function groupUpcomingByDay(events: SavedEvent[]): EventDay[] {
+  // Event times are Spanish wall-clock times, so compare against "now" in Europe/Madrid:
+  // correct whatever time zone the server runs in
   const now = new Date();
   const upcoming = events
-    .filter((e) => !hasEnded(e, now))
+    .filter((e) => !hasEventEnded(e, now))
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 
   const days: EventDay[] = [];

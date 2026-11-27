@@ -14,7 +14,6 @@ export interface Event {
   imageUrl?: string;
   artistName?: string;
   perks?: string[];
-  isSaved?: boolean;
   lat?: number;
   lon?: number;
 }

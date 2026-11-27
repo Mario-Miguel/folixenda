@@ -1,44 +1,34 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import CalendarWidget from "@/components/CalendarWidget";
 import CategoryFilter from "@/components/CategoryFilter";
 import EventCard from "@/components/EventCard";
 import MapView from "@/components/MapView";
-import { getEvents } from "@/lib/api/events";
-import { Event } from "@/lib/types";
 import { CalendarDays } from "lucide-react";
 import SwitchMapWidget from "@/components/SwitchMapWidget";
 import CompactEventList from "@/components/CompactEventList";
+import LoadError from "@/components/LoadError";
 import { formatLongDate } from "@/i18n/format";
-
-function toISODateStr(d: Date) {
-  return d.toISOString().split("T")[0];
-}
+import { monthRange, startOfMonth, toISODateStr } from "@/lib/dates";
+import { useEvents } from "@/lib/hooks/useEvents";
 
 export default function HomePage() {
   const { t, i18n } = useTranslation();
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showMap, setShowMap] = useState(false);
-  const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-  useEffect(() => {
-    getEvents()
-      .then((r) => setAllEvents(r.events))
-      .catch(console.error);
-  }, []);
+  // Events of the selected day, filtered by the API
+  const day = useEvents({ date: toISODateStr(selectedDate), category: selectedCategory });
+  // Events of the month shown in the mini calendar, only to mark the days that have events
+  const month = useEvents({ ...monthRange(calendarMonth), category: selectedCategory });
 
-  const eventDates = useMemo(() => new Set(allEvents.map((e) => e.date)), [allEvents]);
-
-  const dayEvents = useMemo(() => {
-    const dateStr = toISODateStr(selectedDate);
-    const events = allEvents.filter((e) => e.date === dateStr);
-    if (selectedCategory === "All") return events;
-    return events.filter((e) => e.category === selectedCategory);
-  }, [selectedDate, selectedCategory, allEvents]);
+  const eventDates = useMemo(() => new Set(month.events.map((e) => e.date)), [month.events]);
+  const dayEvents = day.events;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -50,11 +40,17 @@ export default function HomePage() {
       <div className="flex gap-8">
         {/* Left column: calendar + map toggle */}
         <aside className="hidden lg:flex flex-col gap-4 w-72 shrink-0">
-          <CalendarWidget selectedDate={selectedDate} onSelect={setSelectedDate} eventDates={eventDates} />
+          <CalendarWidget
+            selectedDate={selectedDate}
+            onSelect={setSelectedDate}
+            eventDates={eventDates}
+            month={calendarMonth}
+            onMonthChange={setCalendarMonth}
+          />
 
           {/* Map / Calendar toggle */}
           <SwitchMapWidget setShowMap={setShowMap} showMap={showMap} />
-          {showMap && (
+          {showMap && !day.loading && !day.error && (
             <CompactEventList events={dayEvents} selectedEventId={selectedEventId} onSelect={setSelectedEventId} />
           )}
         </aside>
@@ -64,9 +60,9 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-xl font-bold text-gray-900">{formatLongDate(selectedDate, i18n.language)}</h2>
-              <p className="text-sm text-gray-500 mt-0.5">
-                {t("common.eventsFound", { count: dayEvents.length })}
-              </p>
+              {!day.loading && !day.error && (
+                <p className="text-sm text-gray-500 mt-0.5">{t("common.eventsFound", { count: dayEvents.length })}</p>
+              )}
             </div>
           </div>
 
@@ -82,7 +78,11 @@ export default function HomePage() {
             </div>
           )}
 
-          {dayEvents.length === 0 ? (
+          {day.error ? (
+            <LoadError onRetry={day.retry} />
+          ) : day.loading ? (
+            <p className={`text-center py-20 text-gray-400 ${showMap ? "lg:hidden" : ""}`}>{t("common.loading")}</p>
+          ) : dayEvents.length === 0 ? (
             <div className={`text-center py-20 text-gray-400 ${showMap ? "lg:hidden" : ""}`}>
               <CalendarDays className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium">{t("common.noEventsOnDay")}</p>
@@ -99,7 +99,7 @@ export default function HomePage() {
           {/* Mobile map */}
           <div className="mt-8 lg:hidden">
             <h3 className="font-semibold text-gray-900 mb-3">{t("common.eventsMap")}</h3>
-            <MapView />
+            <MapView events={dayEvents} selectedEventId={selectedEventId} onSelectEvent={setSelectedEventId} />
           </div>
         </section>
       </div>

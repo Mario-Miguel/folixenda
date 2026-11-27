@@ -13,6 +13,7 @@ La autenticación se gestiona con [Better Auth](https://better-auth.com), que se
 - [Variables de entorno](#variables-de-entorno)
 - [Páginas y componentes](#páginas-y-componentes)
 - [JWT para la API de Go](#jwt-para-la-api-de-go)
+- [Permisos por rol](#permisos-por-rol)
 - [Puesta en marcha](#puesta-en-marcha)
 - [Tareas habituales](#tareas-habituales)
 - [Pendiente](#pendiente)
@@ -31,7 +32,8 @@ Navegador ──(cookie de sesión)──▶ Next.js /api/auth/*  ──▶ Post
 1. El usuario se registra o inicia sesión en `/signup` o `/login`. Better Auth valida las credenciales contra el schema `auth` de Postgres y devuelve una **cookie de sesión HttpOnly** (7 días).
 2. El resto del frontend lee la sesión con `useSession()`.
 3. Cuando el navegador llama a la API de Go, un interceptor de axios pide a Better Auth un **JWT de corta duración** (15 minutos) y lo envía en la cabecera `Authorization`.
-4. Go verifica el JWT con las claves públicas de `/api/auth/jwks` y obtiene el usuario del claim `sub`.
+4. Go verifica el JWT con las claves públicas de `/api/auth/jwks`, obtiene el usuario del claim `sub` y autoriza según el claim `role` (ver [Permisos por rol](#permisos-por-rol)).
+5. En cada petición autenticada, Go crea o actualiza el perfil del usuario en `public.users` con los datos del token.
 
 Así Next.js es el único que tiene credenciales de la base de datos de auth, y Go solo depende del contrato del JWT. Si en el futuro la autenticación se mueve a Go, basta con que Go emita tokens con el mismo formato.
 
@@ -41,14 +43,30 @@ Así Next.js es el único que tiene credenciales de la base de datos de auth, y 
 |---------|-------------|
 | `lib/better-auth/server.ts` | Configuración de Better Auth (solo servidor). Exporta `auth` y el tipo `Session`. |
 | `lib/better-auth/client.ts` | Cliente para React: `signIn`, `signUp`, `signOut`, `useSession`, y `getApiToken()` / `clearApiToken()` para el JWT. |
+| `lib/better-auth/server-token.ts` | `getServerApiToken()`: obtiene el JWT en el servidor a partir de las cookies de la petición (`null` si no hay sesión). |
 | `app/api/auth/[...all]/route.ts` | Expone todos los endpoints de Better Auth en `/api/auth/*`. |
 | `lib/api/api.ts` | Cliente axios de la API de Go. Añade el JWT a cada petición hecha desde el navegador. |
+| `lib/api/users.ts` | `getUsers`, `getUser`, `updateUser` y `deleteUser` contra `/api/users`. No hay creación: las cuentas se crean con el registro de Better Auth. |
 | `app/login/page.tsx` | Página de inicio de sesión (correo y contraseña). |
 | `app/signup/page.tsx` | Página de registro (nombre, correo, contraseña y confirmación). |
+| `app/admin/page.tsx` | Server Component que comprueba la sesión y el rol antes de mostrar el panel. |
+| `app/admin/AdminDashboard.tsx` | Panel de administración (cliente): pestañas de usuarios y eventos. |
 | `components/Navbar.tsx` | Muestra la inicial del correo del usuario y el menú para cerrar sesión, o un icono que lleva a `/login`. |
-| `i18n/locales/{es,en}.json` | Textos de `login.*`, `signup.*`, `nav.login` y `nav.logout`. |
+| `i18n/locales/{es,en}.json` | Textos de `login.*`, `signup.*`, `admin.*`, `nav.login` y `nav.logout`. |
 
-> `lib/auth.ts` (helpers de `localStorage`) y `lib/api/auth.ts` (login contra Go) son del sistema anterior y solo los usa todavía `/admin`. Ver [Pendiente](#pendiente).
+En el backend de Go:
+
+| Fichero | Descripción |
+|---------|-------------|
+| `auth/verifier.go` | Verifica los JWT con el JWKS de Better Auth. |
+| `auth/claims.go`, `auth/context.go` | Claims del token (`email`, `name`, `role` y los registrados) y cómo se guardan en el `context`. |
+| `auth/roles.go` | Constantes `RoleAdmin`, `RoleConsumer`, `RolePublisher`, `ValidRole()` y `Claims.IsAdmin()`. |
+| `middleware/authenticate.go` | `Authenticate`: lee `Authorization: Bearer <jwt>`, lo verifica y guarda los claims. Sin token o con uno inválido → `401`. |
+| `middleware/provision.go` | `Provision`: crea o actualiza el perfil en `public.users`. |
+| `middleware/roles.go` | `RequireRole` y `RequireSelfOrRole` (ver [Permisos por rol](#permisos-por-rol)). |
+| `handlers/*.go` | Cada `Register` recibe `protect` (`Authenticate` → `Provision`) y añade encima las comprobaciones de rol. |
+
+El sistema anterior (login contra Go, `lib/auth.ts` con `localStorage`, `lib/api/auth.ts` y el hashing con bcrypt en Go) ya se ha eliminado.
 
 ## Configuración de Better Auth
 
@@ -78,15 +96,37 @@ Detalles a tener en cuenta:
 
 - Las contraseñas **no** están en `auth."user"`, sino en `auth.account` (fila con `providerId = 'credential'`).
 - `auth.jwks` guarda los pares de claves con los que se firman los JWT. La clave privada está cifrada con `BETTER_AUTH_SECRET`.
-- La tabla `users` del backend de Go es independiente y no tiene clave foránea hacia `auth."user"`. La sincronización está descrita en [Pendiente](#pendiente).
 
-Setup inicial de la base de datos (ya hecho, como superusuario):
+### Perfil de Go (`public.users`)
+
+- `public.users` es la tabla de **perfil** del usuario en Go. Su `id` es `uuid` (el mismo que `auth."user".id` y que el `sub` del JWT) y es clave foránea hacia `auth."user"(id)` con `ON DELETE CASCADE`.
+- `user_saved_events.user_id` apunta a `public.users(id)` y `event_id` a `events(id)`, ambos con `ON DELETE CASCADE`. Borrar un usuario de Better Auth borra su perfil y sus eventos guardados; borrar un evento borra los guardados que lo referencian.
+- Las filas las crea el middleware `Provision` la primera vez que el usuario llama a un endpoint protegido. Un usuario que se ha registrado pero nunca ha llamado a la API de Go no aparece en `public.users` (ni, por tanto, en `/admin`).
+- `PUT /api/users/{id}` actualiza `public.users` y también `role` y `name` de `auth."user"` en **una misma transacción**. Better Auth es el origen de los claims del JWT, así que sin esa segunda escritura el cambio no llegaría nunca al token (y `Provision` lo desharía en el siguiente upsert).
+
+Para eso, el rol con el que se conecta Go necesita estos permisos sobre el schema `auth`:
 
 ```sql
-CREATE SCHEMA auth;
-CREATE ROLE folixenda_auth LOGIN PASSWORD '...';
-GRANT USAGE, CREATE ON SCHEMA auth TO folixenda_auth;
+GRANT USAGE ON SCHEMA auth TO <rol de Go>;
+GRANT SELECT, REFERENCES, UPDATE (role, name, "updatedAt") ON auth."user" TO <rol de Go>;
 ```
+
+### Orden de creación
+
+1. `db_queries/better_auth.sql` (local, no versionado), como superusuario: crea el schema `auth` y el rol `folixenda_auth`.
+
+   ```sql
+   CREATE SCHEMA auth;
+   CREATE ROLE folixenda_auth LOGIN PASSWORD '...';
+   GRANT USAGE, CREATE ON SCHEMA auth TO folixenda_auth;
+   ```
+
+2. Migraciones de Better Auth (ver [Puesta en marcha](#puesta-en-marcha)): crean `auth."user"` y el resto de tablas.
+3. Migraciones de Go, en `backend/migrations/` (con [goose](https://github.com/pressly/goose), embebidas en el binario). El servidor aplica las pendientes al arrancar; también se pueden lanzar a mano desde `backend/` con `go run ./cmd/migrate` (`up`, `status` o `down`). Las versiones aplicadas se guardan en la tabla `goose_db_version`.
+   - `00001_initial_schema.sql`: crea `events`, `users`, `publisher_predefined_events` y `user_saved_events` (si no existen). Necesita que exista `auth."user"` por la clave foránea.
+   - `00002_user_cascade.sql`: para bases de datos creadas antes de las migraciones. Convierte los `id` de usuario a `uuid` y rehace las claves foráneas con `ON DELETE CASCADE`. **Borra** las filas de `public.users` (y sus eventos guardados) que no tengan un usuario en `auth."user"`, porque si existen no se puede crear la clave foránea. Es irreversible.
+
+   Para cambiar el esquema, añade un fichero nuevo `0000N_descripcion.sql` con `-- +goose Up` / `-- +goose Down`; no edites migraciones ya aplicadas.
 
 ## Variables de entorno
 
@@ -101,12 +141,21 @@ En `frontend/.env` (ignorado por git):
 
 Solo las variables con prefijo `NEXT_PUBLIC_` se envían al navegador. **Nunca** añadas ese prefijo a `DATABASE_URL` ni a `BETTER_AUTH_SECRET`.
 
+En `backend/.env`, además de la conexión a Postgres (`POSTGRES_*`) y `PORT`:
+
+| Variable | Ejemplo | Descripción |
+|----------|---------|-------------|
+| `AUTH_JWKS_URL` | `http://localhost:3000/api/auth/jwks` | Claves públicas para verificar los JWT. |
+| `AUTH_ISSUER` | `http://localhost:3000` | `iss` esperado. Debe coincidir con `BETTER_AUTH_URL`. |
+| `AUTH_AUDIENCE` | `http://localhost:3000` | `aud` esperado. Debe coincidir con `BETTER_AUTH_URL`. |
+
 ## Páginas y componentes
 
 ### `/login`
 
 - Formulario de correo y contraseña que llama a `signIn.email()`.
-- Si las credenciales son correctas, redirige a `/` y refresca la página para que se renderice con la sesión.
+- Si las credenciales son correctas, redirige a la ruta de `?redirect=` (o a `/` si no hay) y refresca la página para que se renderice con la sesión. `safeRedirect()` solo acepta rutas del propio sitio (empiezan por `/` pero no por `//` ni `/\`), para que el parámetro no pueda llevar a otro dominio.
+- Las páginas protegidas envían aquí con `?redirect=`: `/my-events` y `/admin` al no haber sesión, y `SaveEventButton` cuando la API responde `401`.
 - Errores: `401` → "Correo o contraseña incorrectos"; cualquier otro → error genérico.
 - Enlace "¿No tienes cuenta? Crear cuenta" a `/signup`.
 
@@ -132,6 +181,22 @@ Solo las variables con prefijo `NEXT_PUBLIC_` se envían al navegador. **Nunca**
 - **Con sesión:** círculo con la primera letra del correo en mayúscula. Al pulsarlo se abre un menú con el correo y "Cerrar sesión", que llama a `signOut()`, borra el JWT en caché y redirige a `/`.
 - Si el rol es `admin`, muestra el enlace a `/admin`.
 
+### `/admin`
+
+`app/admin/page.tsx` es un **Server Component** que lee la sesión con `auth.api.getSession()`:
+
+- **Sin sesión:** redirige a `/login?redirect=/admin`.
+- **Con sesión pero sin rol `admin`:** muestra una tarjeta de "Acceso de administrador" con el mensaje de que la cuenta no tiene acceso y un enlace a `/`.
+- **Con rol `admin`:** renderiza `AdminDashboard` (cliente) con el nombre (o el correo) del usuario.
+
+`AdminDashboard` tiene dos pestañas:
+
+- **Usuarios:** lista de `GET /api/users`. Se puede editar el **nombre** y el **rol** (el correo se muestra pero no se puede cambiar, porque es el login de Better Auth) y eliminar. No hay creación de usuarios: las cuentas se crean con `/signup`.
+- **Eliminar usuario:** el botón llama a la Server Action `deleteUserAction` (`app/admin/actions.ts`), no a la API de Go. Comprueba en el servidor que la sesión es de un `admin` y que no se borra a sí mismo (el botón de su propia fila está desactivado), y borra el usuario con `internalAdapter.deleteUser` de Better Auth (usuario, sesiones y cuentas). El perfil de `public.users` y sus eventos guardados se borran solos por `ON DELETE CASCADE`. El JWT que el usuario ya tuviera sigue siendo válido hasta 15 minutos, pero sus peticiones fallan porque su perfil ya no existe.
+- **Eventos:** lista, creación, edición y borrado de eventos.
+
+Los errores `403` muestran "No tienes permiso para realizar esta acción" y los `401` "Tu sesión ha caducado. Vuelve a iniciar sesión" (`admin.errors.*`); el resto, un mensaje genérico de cada acción. "Cerrar sesión" llama a `signOut()`, borra el JWT en caché y vuelve a `/`.
+
 ## JWT para la API de Go
 
 ### Cómo lo obtiene el frontend
@@ -142,7 +207,7 @@ Solo las variables con prefijo `NEXT_PUBLIC_` se envían al navegador. **Nunca**
 2. Si no, llama a `GET /api/auth/token` (requiere la cookie de sesión) y guarda el token nuevo y su `exp`.
 3. Si no hay sesión, devuelve `null` y la petición sale sin cabecera `Authorization`.
 
-El interceptor de `lib/api/api.ts` lo usa en cada petición **hecha desde el navegador**. En Server Components no se envía todavía (ver [Pendiente](#pendiente)).
+El interceptor de `lib/api/api.ts` lo usa en cada petición **hecha desde el navegador**. En el servidor el interceptor no hace nada: los Server Components obtienen el token con `getServerApiToken()` (`lib/better-auth/server-token.ts`, que llama a `auth.api.getToken({ headers: await headers() })`) y lo pasan a la función de la API, por ejemplo `getSavedEvents(token)` o `isEventSaved(id, token)`.
 
 ### Formato del token
 
@@ -167,11 +232,39 @@ Payload:
 }
 ```
 
-### Cómo debe verificarlo Go
+### Cómo lo verifica Go
 
-- Claves públicas: `GET http://localhost:3000/api/auth/jwks` (formato JWKS, `kty: OKP`, `crv: Ed25519`). Guardarlas en caché y volver a pedirlas si llega un `kid` desconocido.
-- Comprobar `alg = EdDSA`, `iss`, `aud` y `exp`.
-- Identificar al usuario por `sub` y autorizar por `role`.
+- `auth.NewVerifier` descarga las claves públicas de `AUTH_JWKS_URL` (formato JWKS, `kty: OKP`, `crv: Ed25519`) con `keyfunc`, que las guarda en caché y las vuelve a pedir si llega un `kid` desconocido.
+- `Verify` solo acepta `alg = EdDSA` (nunca `none` ni `HS256`) y exige `iss = AUTH_ISSUER`, `aud = AUTH_AUDIENCE` y `exp`.
+- `Authenticate` responde `401` si falta la cabecera `Authorization: Bearer <jwt>` o el token no es válido.
+- `Provision` crea o actualiza el perfil (`id`, `email`, `name`, `role`) en `public.users` con `INSERT … ON CONFLICT (id) DO UPDATE`. Guarda en memoria el último perfil escrito para cada `sub` y vuelve a hacer el upsert cuando cambian el `email`, el `name` o el `role` del token, así que un cambio de rol se refleja en cuanto llega un token nuevo.
+- La autorización usa siempre el `role` **del token**, no el de `public.users`.
+
+## Permisos por rol
+
+Roles: `admin`, `publisher` y `consumer` (por defecto al registrarse). Se comprueban en Go con los middlewares de `middleware/roles.go`, después de `Authenticate` y `Provision`:
+
+- `RequireRole(roles...)`: sin claims → `401`; rol no incluido → `403`.
+- `RequireSelfOrRole("id", roles...)`: deja pasar si el `{id}` de la ruta es el `sub` del token o si el rol está incluido; si no, `403`.
+
+| Endpoint | Quién puede |
+|----------|-------------|
+| `GET /api/events`, `GET /api/events/{id}` | Cualquiera, sin sesión |
+| `POST /api/events`, `PUT /api/events/{id}`, `DELETE /api/events/{id}` | `admin` o `publisher` |
+| `GET /api/users` | `admin` |
+| `GET /api/users/{id}`, `PUT /api/users/{id}` | `admin`, o el propio usuario. Si no es `admin`, el campo `role` del cuerpo se ignora |
+| `GET /api/savedEvents`, `GET /api/savedEvents/{eventId}`, `POST /api/savedEvents`, `DELETE /api/savedEvents/{eventId}` | Cualquier usuario con sesión. El usuario sale siempre del token, no de la URL ni del cuerpo |
+
+No hay `DELETE /api/users/{id}` (responde `405`): los usuarios se borran en Better Auth desde `/admin` y el perfil de Go se borra en cascada.
+
+Detalles de `PUT /api/users/{id}`:
+
+- Es una actualización parcial: los campos que vienen en el JSON sobrescriben el perfil y los que faltan se mantienen.
+- `id` y `email` pertenecen a Better Auth y nunca se cambian.
+- Si lo hace un `admin`, el `role` debe ser `admin`, `consumer` o `publisher` (si no, `400`).
+- El cambio de `role` y `name` se escribe también en `auth."user"` (ver [Perfil de Go](#perfil-de-go-publicusers)), pero llega al JWT del usuario afectado con retraso: como mucho 5 minutos de caché de cookie más 15 minutos de vida del JWT en caché. Hasta entonces Go sigue autorizando con el rol anterior.
+
+En el frontend, `/admin` solo es accesible para `admin` (ver [`/admin`](#admin)).
 
 ## Puesta en marcha
 
@@ -194,6 +287,8 @@ pnpm dlx auth generate --config lib/better-auth/server.ts --output auth.sql -y
 
 Hay que volver a migrar cada vez que se cambie algo que afecte al esquema: campos adicionales, plugins nuevos, etc.
 
+Las tablas de Go dependen de `auth."user"`, así que hay que migrar Better Auth **antes** de crear las tablas de la aplicación o arrancar el servidor de Go (ver [Orden de creación](#orden-de-creación)).
+
 ## Tareas habituales
 
 **Crear un usuario sin la interfaz** (con `pnpm dev` en marcha):
@@ -204,13 +299,13 @@ curl -X POST http://localhost:3000/api/auth/sign-up/email \
   -d '{"email":"usuario@example.com","password":"minimo8caracteres","name":"Nombre"}'
 ```
 
-**Dar rol de administrador:**
+**Dar rol de administrador** (el primero hay que darlo así; después se puede hacer desde `/admin`):
 
 ```sql
 UPDATE auth."user" SET role = 'admin' WHERE email = 'usuario@example.com';
 ```
 
-El cambio se refleja en el JWT en cuanto caduque el token en caché (15 minutos como máximo) y en la sesión cuando caduque la caché de cookie (5 minutos).
+El cambio llega a la sesión cuando caduca la caché de cookie (5 minutos) y al JWT cuando caduca el token en caché (15 minutos como máximo). `public.users` se actualiza solo en la siguiente petición a Go con el token nuevo (`Provision`).
 
 **Leer la sesión en un componente cliente:**
 
@@ -243,24 +338,12 @@ const session = await auth.api.getSession({ headers: await headers() });
 
 ## Pendiente
 
-**Frontend:**
-
-- `/admin` todavía usa el login antiguo contra Go (`lib/api/auth.ts`) y guarda el usuario en `localStorage` (`lib/auth.ts`). Hay que pasarlo a `useSession()` y comprobar `role === "admin"`; después se pueden borrar esos dos ficheros.
-- Las páginas que llaman a la API desde el servidor (por ejemplo `/my-events`) no envían el JWT. Se obtiene con `auth.api.getToken({ headers: await headers() })`.
-- `/my-events` usa el usuario fijo `ConsumerUser` de `data/users.ts`. Debe usar el usuario de la sesión, o mejor, rutas `/api/me/...` en las que Go saque el usuario del token.
-- No hay protección de rutas: las páginas que requieren sesión deberían redirigir a `/login`.
-
-**Backend (sincronización con Better Auth):**
-
-1. Adaptar la tabla `users` de Go como tabla de perfil: `id` = UUID de Better Auth (`sub`), sin `password` y con `username` opcional.
-2. Middleware que verifique el JWT con el JWKS y guarde `sub`, `email` y `role` en el `context`.
-3. Crear o actualizar el perfil la primera vez que llega cada usuario (`INSERT … ON CONFLICT (id) DO UPDATE`).
-4. Sacar el usuario del token en lugar de la URL (`/api/me/saved-events` en vez de `/api/user/{userId}/savedEvents`).
-5. Eliminar `POST /api/auth/login` y el hashing con bcrypt de Go.
-6. Decidir qué hacer con el perfil de Go cuando se borra un usuario en Better Auth (hook `databaseHooks.user.delete.after` o limpieza periódica).
+- **Caché de `Provision`:** no se limpia al borrar un usuario. Durante los 15 minutos que le queden al JWT del usuario borrado, Go no vuelve a hacer el upsert y sus peticiones fallan (por ejemplo, guardar un evento da `404` por la clave foránea). Si Go se reinicia en ese rato, el upsert falla con `500`. En ambos casos no se recrea nada.
+- **Rol antiguo tras reiniciar Go:** la caché de `Provision` está en memoria. Si Go se reinicia mientras un usuario aún tiene un JWT emitido antes de un cambio de rol, el primer upsert escribe el rol antiguo en `public.users` hasta que llegue un token nuevo. La autorización no se ve afectada (usa el rol del token), pero `/admin` puede mostrar el rol antiguo durante ese rato.
+- **`better_auth.sql` sin versionar:** sigue en `db_queries/` (ignorado por git), porque crea un rol con contraseña. Las migraciones de Go sí están versionadas en `backend/migrations/`.
 
 ## Otros cambios en el frontend
 
 - **Dependencias nuevas:** `better-auth`, `pg`, `@node-rs/argon2` y `@types/pg` (dev).
 - **`pnpm-workspace.yaml`:** `allowBuilds` permite ejecutar los scripts de instalación de `sharp` (optimización de imágenes de Next.js) y `unrs-resolver` (usado por ESLint). pnpm 10+ los bloquea por defecto.
-- **Tipos de eventos de formulario:** `FormEvent` está obsoleto en los tipos de React 19; los formularios nuevos usan `SubmitEvent<HTMLFormElement>`.
+- **Tipos de eventos de formulario:** `FormEvent` está obsoleto en los tipos de React 19; los formularios nuevos usan `SubmitEvent<HTMLFormElement>`. `AdminDashboard` todavía usa `FormEvent`.

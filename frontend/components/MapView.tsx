@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { MapPin } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Event, EventCategory } from "@/lib/types";
+import { Event } from "@/lib/types";
+import { CATEGORIES, categoryColor } from "@/lib/categories";
 import type { MapMarker } from "@/components/EventsMap";
 
 const EventsMap = dynamic(() => import("@/components/EventsMap"), {
@@ -11,14 +12,8 @@ const EventsMap = dynamic(() => import("@/components/EventsMap"), {
   loading: () => <div className="h-full w-full animate-pulse bg-gray-100" />,
 });
 
-const LEGEND_ITEMS: Partial<Record<EventCategory, string>> = {
-  Music: "#8b5cf6",
-  Theater: "#3b82f6",
-  Parties: "#ec4899",
-  Wellness: "#14b8a6",
-  Art: "#f43f5e",
-  Food: "#eab308",
-};
+// Events without coordinates are placed (as an approximate area) at the center of Oviedo
+const DEFAULT_POSITION = { lat: 43.3614, lon: -5.8494 };
 
 interface MapViewProps {
   events?: Event[];
@@ -35,16 +30,17 @@ export default function MapView({
 }: MapViewProps) {
   const { t } = useTranslation();
   const selectedEvent = events.find((e) => e.id === selectedEventId);
-  // TODO: build markers from events once the API returns event coordinates (lat/lon),
-  // using LEGEND_ITEMS for the category color
-  const markers: MapMarker[] = events.map((e) => ({
-    id: e.id,
-    lat: e.lat || 43.3614,
-    lon: e.lon || -5.8494,
-    precise: e.lat != null && e.lon != null,
-    event: e,
-    color: "#14b8a6",
-  }));
+  const markers: MapMarker[] = events.map((e) => {
+    const precise = e.lat != null && e.lon != null;
+    return {
+      id: e.id,
+      lat: precise ? e.lat! : DEFAULT_POSITION.lat,
+      lon: precise ? e.lon! : DEFAULT_POSITION.lon,
+      precise,
+      event: e,
+      color: categoryColor(e.category),
+    };
+  });
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
@@ -66,9 +62,9 @@ export default function MapView({
       <div className="px-5 py-3 border-t border-gray-100">
         <p className="text-xs font-medium text-gray-500 mb-2">{t("common.eventTypes")}</p>
         <div className="flex flex-wrap gap-3">
-          {(Object.entries(LEGEND_ITEMS) as [EventCategory, string][]).map(([label, color]) => (
+          {CATEGORIES.map((label) => (
             <div key={label} className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: categoryColor(label) }} />
               <span className="text-xs text-gray-600">{t(`categories.${label}`)}</span>
             </div>
           ))}

@@ -3,7 +3,7 @@
 import { Clock, MapPin } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Event } from "@/lib/types";
-import { CATEGORY_COLORS } from "@/components/EventCard";
+import { categoryBadgeClass } from "@/lib/categories";
 
 interface CompactEventListProps {
   events: Event[];
@@ -30,7 +30,7 @@ export default function CompactEventList({ events, selectedEventId, onSelect }: 
       <ul className="max-h-[28rem] overflow-y-auto divide-y divide-gray-100">
         {events.map((event) => {
           const selected = event.id === selectedEventId;
-          const categoryColor = CATEGORY_COLORS[event.category] ?? "bg-gray-100 text-gray-600";
+          const categoryColor = categoryBadgeClass(event.category);
 
           return (
             <li key={event.id}>

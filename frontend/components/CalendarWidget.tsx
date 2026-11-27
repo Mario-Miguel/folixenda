@@ -1,29 +1,28 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { formatMonthYear, weekdayNames } from "@/i18n/format";
+import { toISODateStr } from "@/lib/dates";
 
 interface CalendarWidgetProps {
   selectedDate: Date;
   onSelect: (date: Date) => void;
   eventDates?: Set<string>; // ISO date strings with events
-}
-
-function toISODateStr(d: Date) {
-  return d.toISOString().split("T")[0];
+  // Visible month (any date inside it) and its navigation, owned by the parent so it can
+  // load that month's events
+  month: Date;
+  onMonthChange: (month: Date) => void;
 }
 
 export default function CalendarWidget({
   selectedDate,
   onSelect,
   eventDates = new Set(),
+  month: viewDate,
+  onMonthChange,
 }: CalendarWidgetProps) {
   const { t, i18n } = useTranslation();
-  const [viewDate, setViewDate] = useState(
-    new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
-  );
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
@@ -31,8 +30,10 @@ export default function CalendarWidget({
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = toISODateStr(new Date());
 
-  const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
+  const selected = toISODateStr(selectedDate);
+
+  const prevMonth = () => onMonthChange(new Date(year, month - 1, 1));
+  const nextMonth = () => onMonthChange(new Date(year, month + 1, 1));
 
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
@@ -79,7 +80,7 @@ export default function CalendarWidget({
           if (!day) return <div key={`empty-${i}`} />;
 
           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const isSelected = toISODateStr(selectedDate) === dateStr;
+          const isSelected = selected === dateStr;
           const isToday = today === dateStr;
           const hasEvent = eventDates.has(dateStr);
 

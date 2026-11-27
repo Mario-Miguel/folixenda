@@ -2,11 +2,12 @@
 
 Esta guía describe cómo el frontend obtiene, muestra y guarda eventos: la página principal, el calendario, el detalle de un evento, el mapa y la página "Mis eventos".
 
-Para el login, el registro y el JWT que se envía a la API, ver [autenticacion.md](autenticacion.md).
+Para el login, el registro, el JWT que se envía a la API y los permisos de cada rol, ver [autenticacion.md](autenticacion.md).
 
 ## Índice
 
 - [Modelo de datos](#modelo-de-datos)
+- [Categorías](#categorías)
 - [Acceso a la API](#acceso-a-la-api)
 - [Páginas](#páginas)
   - [`/` Descubrir](#-descubrir)
@@ -14,6 +15,7 @@ Para el login, el registro y el JWT que se envía a la API, ver [autenticacion.m
   - [`/events/[id]` Detalle del evento](#eventsid-detalle-del-evento)
   - [`/my-events` Mis eventos](#my-events-mis-eventos)
 - [Guardar eventos](#guardar-eventos)
+- [Compartir](#compartir)
 - [Componentes](#componentes)
 - [Mapa](#mapa)
 - [Fechas e idiomas](#fechas-e-idiomas)
@@ -40,7 +42,6 @@ interface Event {
   imageUrl?: string;
   artistName?: string;
   perks?: string[];   // "Qué incluye"
-  isSaved?: boolean;  // lo usa EventCard, pero la API no lo rellena
   lat?: number;
   lon?: number;
 }
@@ -50,35 +51,64 @@ interface ApiEventsResponse { events: Event[]; total: number }
 // Eventos guardados
 interface SavedEvent extends Event { savedAt: string }
 interface UserSavedEvents { userId: string; savedEvents: SavedEvent[] }
-interface UserSavedEvent { id: string; userId: string; eventId: string }
 ```
+
+- El tipo `Event` ya no tiene `isSaved`. La API de Go todavía devuelve ese campo (columna `is_saved` de `events`), pero el frontend lo ignora: si un evento está guardado se pregunta por usuario (ver [Guardar eventos](#guardar-eventos)).
+- No hay ningún campo con la URL de venta de entradas.
+
+## Categorías
+
+`lib/categories.ts` es la única fuente de los colores de categoría:
+
+- `CATEGORY_STYLES`: para cada categoría, `badge` (clases Tailwind de fondo claro y texto) y `color` (hex sólido para las etiquetas del calendario, los marcadores del mapa y las leyendas).
+- `CATEGORIES`: la lista de categorías, en el orden de `CATEGORY_STYLES`. La usan las leyendas de `/calendar` y `MapView` y el selector de `/admin`.
+- `categoryBadgeClass(category)` y `categoryColor(category)`: aceptan cualquier cadena; si la API devuelve una categoría desconocida, usan un gris de reserva.
 
 Las categorías se muestran traducidas con `t("categories.<Categoría>")`. `"All"` es un valor especial de los filtros, no una categoría.
 
 ## Acceso a la API
 
-Todas las llamadas usan el cliente axios de `lib/api/api.ts` (base `${NEXT_PUBLIC_API_URL}/api`). Los errores se convierten en `ApiError` con `status` y `message`. Desde el navegador, cada petición lleva el JWT del usuario si hay sesión (ver [autenticacion.md](autenticacion.md#jwt-para-la-api-de-go)).
+Todas las llamadas usan el cliente axios de `lib/api/api.ts` (base `${NEXT_PUBLIC_API_URL}/api`). Los errores se convierten en `ApiError` con `status` y `message`. Desde el navegador, cada petición lleva el JWT del usuario si hay sesión; desde el servidor, el token se pasa como argumento (ver [autenticacion.md](autenticacion.md#jwt-para-la-api-de-go)).
 
 ### Eventos (`lib/api/events.ts`)
 
 | Función | Petición | Uso |
 |---------|----------|-----|
-| `getEvents(params?)` | `GET /events?date=&category=` | Listado. Los filtros son opcionales. |
+| `getEvents(params?)` | `GET /events?date=&from=&to=&category=` | Listado. Ver los filtros abajo. |
 | `getEvent(id)` | `GET /events/{id}` | Detalle. |
-| `createEvent(event)` | `POST /events` | Panel de admin. |
-| `updateEvent(id, event)` | `PUT /events/{id}` | Panel de admin. |
-| `deleteEvent(id)` | `DELETE /events/{id}` | Panel de admin. |
+| `createEvent(event)` | `POST /events` | Panel de admin. Requiere rol `admin` o `publisher`. |
+| `updateEvent(id, event)` | `PUT /events/{id}` | Panel de admin. Requiere rol `admin` o `publisher`. |
+| `deleteEvent(id)` | `DELETE /events/{id}` | Panel de admin. Requiere rol `admin` o `publisher`. |
+
+Filtros de `getEvents` (`EventsQuery`), todos opcionales y combinables:
+
+| Parámetro | Formato | Efecto |
+|-----------|---------|--------|
+| `date` | `YYYY-MM-DD` | Eventos que empiezan ese día. |
+| `from` / `to` | `YYYY-MM-DD` | Rango de fechas de inicio, **ambos incluidos**. |
+| `category` | Nombre de categoría | Solo esa categoría. `"All"` no se envía a la API. |
+
+La API devuelve `400` si una fecha no tiene el formato `YYYY-MM-DD` o si `from` es posterior a `to`, y ordena los resultados por hora de inicio. Al crear o editar, exige `title`, `date` (`YYYY-MM-DD`), `startTime` y `endTime` (`HH:MM`).
 
 ### Eventos guardados (`lib/api/userSavedEvents.tsx`)
 
+Todas actúan sobre el usuario del token: no reciben el id de usuario.
+
 | Función | Petición | Devuelve |
 |---------|----------|----------|
-| `getSavedEvents(userId)` | `GET /user/{userId}/savedEvents` | `UserSavedEvents`: el evento completo más `savedAt`. |
-| `createSavedEvent(userId, { userId, eventId })` | `POST /user/{userId}/savedEvents` | `SavedEvent` |
-| `deleteSavedEvent(userId, eventId)` | `DELETE /user/{userId}/savedEvents/{eventId}` | — |
-| `isEventSaved(userId, eventId)` | Usa `getSavedEvents` | `true` si el evento está en la lista. Descarga la lista completa. |
+| `getSavedEvents(token?)` | `GET /savedEvents` | `UserSavedEvents`: cada evento completo más `savedAt`. |
+| `isEventSaved(eventId, token?)` | `GET /savedEvents/{eventId}` | `true` o `false` (la API responde `{ "saved": bool }`). Un `401` (sin sesión) cuenta como no guardado; el resto de errores se lanzan. |
+| `createSavedEvent(eventId)` | `POST /savedEvents` con `{ eventId }` | La fila creada. La API responde `409` si ya estaba guardado y `404` si el evento no existe. |
+| `deleteSavedEvent(eventId)` | `DELETE /savedEvents/{eventId}` | — |
 
-> Por ahora todas estas llamadas usan un usuario fijo, `ConsumerUser` (`data/users.ts`, id `"2"`), no el usuario de la sesión. Ver [Limitaciones](#limitaciones-conocidas-y-pendientes).
+`token` solo hace falta en Server Components, que lo obtienen con `getServerApiToken()`. En el navegador lo añade el interceptor.
+
+### Carga en componentes cliente (`lib/hooks/useEvents.ts`)
+
+`useEvents(query)` llama a `getEvents(query)` y vuelve a pedir los datos cada vez que cambia la consulta. Devuelve `{ events, loading, error, retry }`:
+
+- `loading` se calcula comparando la consulta del último resultado con la actual, así que una respuesta tardía de una consulta anterior nunca se muestra como la actual.
+- `retry()` repite la misma consulta (lo usa el botón "Reintentar" de `LoadError`).
 
 ## Páginas
 
@@ -86,53 +116,58 @@ Todas las llamadas usan el cliente axios de `lib/api/api.ts` (base `${NEXT_PUBLI
 
 `app/page.tsx`, componente cliente.
 
-- Al montarse descarga **todos** los eventos con `getEvents()` y filtra en el cliente por día y categoría (`useMemo`).
+- Hace dos consultas con `useEvents`, ambas filtradas por categoría en la API:
+  - los eventos del **día seleccionado** (`date`), que son los que se muestran;
+  - los del **mes visible** en el mini calendario (`from`/`to` con `monthRange`), solo para marcar con un punto los días que tienen eventos.
 - **Columna izquierda** (solo en escritorio, `lg`):
-  - `CalendarWidget`: mini calendario. Los días con eventos llevan un punto debajo.
+  - `CalendarWidget`: mini calendario. El mes visible lo controla la página (`calendarMonth`) para poder cargar sus eventos.
   - `SwitchMapWidget`: alterna entre "Lista de eventos" y "Mapa".
   - En modo mapa, `CompactEventList` muestra los eventos del día; al seleccionar uno se resalta en el mapa.
 - **Columna derecha:**
   - Cabecera con la fecha seleccionada (`formatLongDate`) y el número de eventos.
   - En modo lista: `EventCard` compactas. En modo mapa (escritorio): `MapView` con los eventos del día.
-  - Estado vacío: "No hay eventos este día".
-  - En móvil, al final hay un mapa (`MapView` sin eventos).
-- Estado: `selectedDate` (hoy por defecto), `selectedCategory` (`"All"`), `showMap`, `selectedEventId`.
+  - Estados: cargando, error (`LoadError` con "Reintentar") y vacío ("No hay eventos este día").
+  - En móvil, al final hay un mapa con los eventos del día, que comparte la selección con el resto de la página.
+- Estado: `selectedDate` (hoy por defecto), `calendarMonth` (mes actual), `selectedCategory` (`"All"`), `showMap`, `selectedEventId`.
 
 ### `/calendar` Calendario
 
 `app/calendar/page.tsx`, componente cliente.
 
 - Pestañas superiores: Calendario (activa), Descubrir (`/`) y "Mis entradas" (`/my-events`).
-- `CategoryFilter` y navegación entre meses.
-- Cuadrícula mensual que empieza en domingo. Cada día muestra hasta 2 eventos como etiquetas de color que enlazan al detalle, y "+N más" si hay más.
-- Colores por categoría en `CATEGORY_DOT_COLORS`, con una leyenda debajo de la cuadrícula.
-- El botón "Mapa" sustituye la cuadrícula por `MapView`, pero sin eventos.
-- El mes inicial está fijado a **octubre de 2024** (`new Date(2024, 9, 1)`).
+- `CategoryFilter` y navegación entre meses. Empieza en el **mes actual**.
+- Carga solo los eventos del mes visible (`from`/`to`), filtrados por categoría en la API. Si falla, muestra `LoadError` en lugar de la cuadrícula o el mapa.
+- Cuadrícula mensual que empieza en domingo. Cada día muestra hasta 2 eventos (ordenados por hora de inicio) como etiquetas del color de su categoría que enlazan al detalle, y "+N más" si hay más.
+- Debajo de la cuadrícula, una leyenda con todas las categorías (`CATEGORIES`).
+- El botón "Mapa" sustituye la cuadrícula por `MapView` con los eventos del mes.
 
 ### `/events/[id]` Detalle del evento
 
 `app/events/[id]/page.tsx`, **Server Component**.
 
 - Carga el evento con `getEvent(id)`. Si falla, muestra `notFound()` (404).
-- En paralelo carga:
-  - los eventos de la misma categoría (`getEvents({ category })`), de los que muestra hasta 3 como "Más eventos de …";
-  - si el evento está guardado (`isEventSaved(ConsumerUser.id, id)`). Si esa llamada falla, se muestra como no guardado y la página no se rompe.
+- Obtiene el JWT con `getServerApiToken()` y, en paralelo:
+  - carga los eventos de la misma categoría (`getEvents({ category })`) y muestra hasta 3 (sin contar el actual) como "Más eventos de …";
+  - consulta si el evento está guardado con `isEventSaved(id, token)`.
+- Después consulta, también con `isEventSaved`, el estado de cada evento relacionado, para que sus tarjetas muestren el botón de guardar.
+- Sin sesión no se hace ninguna consulta de guardados: todo cuenta como no guardado. Si una consulta falla, ese evento se muestra como no guardado y la página no se rompe.
 - Contenido:
-  - Imagen de cabecera (`EventImage`, con un degradado de fondo si no hay imagen), botón de compartir, botón de guardar (icono) y la categoría.
+  - Imagen de cabecera (`EventImage`, con un degradado de fondo si no hay imagen), `ShareButton`, botón de guardar (icono) y la categoría.
   - Título, artista, descripción, fecha, horario, lugar y dirección, y la lista "Qué incluye" (`perks`).
-  - Barra lateral con precio ("Gratis" si `price === 0`), etiqueta "Se agotan rápido", botón de entradas o inscripción y botón "Guardar para después".
+  - Barra lateral con precio ("Gratis" si `price === 0`, "por persona" si no), una nota informativa y el botón "Guardar para después". No hay botón de comprar entradas porque el modelo no tiene URL de venta: la nota dice que las entradas las gestiona el organizador o el lugar (`event.ticketsInfo`) o, si es gratis, que se consulte si hace falta inscribirse (`event.freeEntryInfo`).
 - **Enlace "Volver":** por defecto vuelve a `/`. Con `?from=my-events` vuelve a `/my-events` ("Volver a mis eventos"). Los valores válidos están en la lista blanca `BACK_LINKS` para evitar redirecciones arbitrarias. Para añadir otro origen, se añade una entrada a `BACK_LINKS` y se enlaza con `?from=<clave>`.
 
 ### `/my-events` Mis eventos
 
 `app/my-events/page.tsx` (Server Component) y `components/MyEventsView.tsx` (cliente).
 
-1. La página pide los eventos guardados con `getSavedEvents(ConsumerUser.id)`.
-2. `groupUpcomingByDay()`:
-   - descarta los eventos que ya han terminado (`hasEnded`: `date` + `endTime`, o `23:59` si no hay hora de fin, comparado con la hora local del **servidor**);
+1. La página obtiene el JWT con `getServerApiToken()`. Sin sesión, redirige a `/login?redirect=/my-events`.
+2. Pide los eventos guardados con `getSavedEvents(token)`.
+3. `groupUpcomingByDay()`:
+   - descarta los eventos que ya han terminado con `hasEventEnded` (ver [Fechas e idiomas](#fechas-e-idiomas));
    - ordena por fecha y hora de inicio;
    - agrupa por día en `EventDay[]` (`{ date, events }`).
-3. Tres estados:
+4. Tres estados:
    - Error al cargar → "No se han podido cargar tus eventos guardados".
    - Lista vacía → icono, "No tienes eventos guardados próximos" y enlace a `/`.
    - Con eventos → `MyEventsView`.
@@ -150,25 +185,35 @@ Todas las llamadas usan el cliente axios de `lib/api/api.ts` (base `${NEXT_PUBLI
 
 - Props: `eventId`, `saved` (estado actual, calculado en el servidor) y `variant`:
   - `"button"` (por defecto): botón ancho de la barra lateral ("Guardar para después" / "Guardado").
-  - `"icon"`: botón redondo con un marcador sobre la imagen de cabecera.
+  - `"icon"`: botón redondo con un marcador, sobre la imagen de cabecera del detalle y de las tarjetas `EventCard`.
 - Al pulsarlo llama a `createSavedEvent` o `deleteSavedEvent` y después hace `router.refresh()` dentro de una transición. Así el Server Component vuelve a calcular `saved` y **todos** los botones de la página se actualizan a la vez.
 - El botón queda deshabilitado mientras se guarda y mientras se refresca la página (`busy`).
-- Si la llamada falla, el estado no cambia y no se muestra ningún mensaje de error.
+- Si la API responde `401` (sin sesión o caducada), redirige a `/login?redirect=<ruta actual>`. Cualquier otro error se relanza y el estado no cambia; no se muestra ningún mensaje.
+- `EventCard` (formato con imagen y `detailed`) muestra este botón solo si recibe la prop `saved`. El padre calcula ese valor; hoy solo lo hace `/events/[id]` para los eventos relacionados.
+
+## Compartir
+
+`components/ShareButton.tsx`, componente cliente. Prop: `title`.
+
+- Si el navegador tiene la Web Share API (`navigator.share`, sobre todo en móvil), abre el panel nativo para compartir con el título y la URL actual. Si el usuario lo cierra, no hace nada más.
+- Si no existe o falla por otro motivo, copia la URL al portapapeles y muestra durante 2 segundos "Enlace copiado" (o "No se ha podido copiar el enlace" si falla). El aviso está en una región `aria-live`.
 
 ## Componentes
 
 | Componente | Tipo | Descripción |
 |------------|------|-------------|
-| `EventCard` | Cliente | Tarjeta de evento con dos formatos (ver abajo). Exporta `CATEGORY_COLORS` (clases Tailwind por categoría). |
+| `EventCard` | Cliente | Tarjeta de evento con dos formatos (ver abajo). Los colores salen de `lib/categories.ts`. |
 | `EventImage` | Cliente | `<img>` para imágenes remotas (ver abajo). |
-| `CalendarWidget` | Cliente | Mini calendario mensual. Props: `selectedDate`, `onSelect`, `eventDates` (`Set` de fechas `YYYY-MM-DD` con eventos). Resalta el día seleccionado y el de hoy. |
+| `CalendarWidget` | Cliente | Mini calendario mensual. Props: `selectedDate`, `onSelect`, `eventDates` (`Set` de fechas `YYYY-MM-DD` con eventos), `month` y `onMonthChange` (el mes visible lo controla el padre). Resalta el día seleccionado y el de hoy. |
 | `CategoryFilter` | Cliente | Botones de categoría con icono, incluido `"All"`. Props: `selected`, `onChange`. |
 | `CompactEventList` | Cliente | Lista seleccionable (título, categoría, hora y lugar) para el modo mapa de `/`. |
 | `SwitchMapWidget` | Cliente | Conmutador Lista / Mapa. |
+| `LoadError` | Cliente | Estado de error al cargar eventos ("No se han podido cargar los eventos"), con botón "Reintentar" si recibe `onRetry`. |
 | `MapView` | Cliente | Envoltorio del mapa: crea los marcadores, muestra el evento seleccionado y la leyenda. |
 | `EventsMap` | Cliente, sin SSR | Mapa de Leaflet (ver [Mapa](#mapa)). |
 | `MyEventsView` | Cliente | Vista de "Mis eventos" (lista por días y mapa). |
 | `SaveEventButton` | Cliente | Guardar o quitar un evento. |
+| `ShareButton` | Cliente | Compartir o copiar el enlace del evento. |
 
 ### `EventCard`
 
@@ -176,9 +221,12 @@ Todas las llamadas usan el cliente axios de `lib/api/api.ts` (base `${NEXT_PUBLI
 |------|-------------|--------|
 | `compact` | `false` | Fila de lista sin imagen: categoría, título, horario, lugar, precio y botón "+". |
 | `detailed` | `true` | Solo en el formato con imagen. `false` muestra solo imagen, título, fecha y "Detalles" (se usa en las tarjetas del mapa). |
-| `approximateLocation` | `false` | Añade "Approximate location" (ubicación aproximada). |
+| `approximateLocation` | `false` | Añade "Ubicación aproximada" (`common.approximateLocation`). |
 | `selected` / `onSelect` | — | Solo en formato compacto. Con `onSelect`, pulsar la tarjeta la **selecciona** y solo el "+" abre el detalle. Sin `onSelect`, toda la tarjeta es un enlace. |
 | `href` | `/events/{id}` | Sustituye el enlace, por ejemplo para añadir `?from=my-events`. |
+| `saved` | — | Solo en el formato con imagen y `detailed`. Si se pasa, muestra `SaveEventButton` (icono) con ese estado; los clics en él no abren el evento. Sin `saved`, no hay botón de guardar. |
+
+La fecha corta del formato con imagen (día de la semana, día y mes abreviados) se formatea en el idioma activo.
 
 ### `EventImage`
 
@@ -191,24 +239,31 @@ Todas las llamadas usan el cliente axios de `lib/api/api.ts` (base `${NEXT_PUBLI
 
 `MapView` (envoltorio) + `EventsMap` (Leaflet con `react-leaflet`, teselas de OpenStreetMap).
 
+Dónde se usa: modo mapa de `/` en escritorio y mapa móvil de `/` (eventos del día), modo mapa de `/calendar` (eventos del mes) y `/my-events` (eventos guardados próximos).
+
 - `EventsMap` se carga con `next/dynamic` y `ssr: false`, porque Leaflet usa `window` al importarse.
 - El mapa se centra en **Oviedo** (`43.3614, -5.8494`) con zoom 13.
 - **Marcadores:**
   - Evento con `lat` y `lon` → **pin** SVG.
   - Evento sin coordenadas → se coloca en el centro de Oviedo como **círculo discontinuo** de 400 m ("ubicación aproximada").
-  - Todos los marcadores usan el mismo color (`#14b8a6`). El seleccionado se pinta en naranja (`#ec5b13`), más grande y por encima de los demás.
+  - Cada marcador lleva el color de su categoría (`categoryColor`). El seleccionado se pinta en naranja (`#ec5b13`), más grande y por encima de los demás. Si un marcador no tiene color, `EventsMap` usa gris.
 - **Interacción:**
   - Clic en un marcador → selecciona o deselecciona el evento (`onSelect`) y abre su tarjeta.
   - Pasar el ratón → muestra la tarjeta (`EventCard` con `detailed={false}`). Se cierra 250 ms después de salir, para que dé tiempo a mover el cursor del pin a la tarjeta.
   - La tarjeta del evento seleccionado queda abierta, y la del evento bajo el cursor puede aparecer a la vez.
   - Al seleccionar un evento, el mapa se desplaza hasta él (`FlyToSelected`).
-- `MapView` muestra encima del mapa una ficha con el evento seleccionado y, debajo, la leyenda de categorías.
+- `MapView` muestra encima del mapa una ficha con el evento seleccionado y, debajo, la leyenda con **todas** las categorías (`CATEGORIES`) y sus colores.
 - El contenedor lleva `isolate` para que las capas de Leaflet (con `z-index` alto) no tapen la barra de navegación.
 - Los iconos de los pines se guardan en caché por color y estado para que `react-leaflet` no los recree en cada render.
 
 ## Fechas e idiomas
 
-- Las fechas de los eventos son cadenas `YYYY-MM-DD`. Para convertirlas en `Date` se les añade `T12:00:00` (o `T00:00:00` en `EventCard`) para que se interpreten en hora local y no en UTC.
+- Las fechas de los eventos son cadenas `YYYY-MM-DD` con la hora local de España. Para convertirlas en `Date` se les añade `T12:00:00` (o `T00:00:00` en `EventCard`) para que se interpreten en hora local y no en UTC.
+- Utilidades en `lib/dates.ts`:
+  - `toISODateStr(date)` → `YYYY-MM-DD` a partir de la fecha **local** (no de `toISOString()`, que daría el día en UTC).
+  - `monthRange(date)` → `{ from, to }` con el primer y el último día del mes, para los filtros de la API.
+  - `startOfMonth(date)` → día 1 del mes.
+  - `hasEventEnded(event, now?)` → `true` cuando ya ha pasado la hora de fin en **`Europe/Madrid`** (`EVENT_TIME_ZONE`), sea cual sea la zona horaria de la máquina. Sin hora de fin, el evento dura todo el día (`23:59`); si la hora de fin es anterior a la de inicio (por ejemplo, 22:00–02:00), termina al día siguiente.
 - Formateadores en `i18n/format.ts`, que usan `Intl` con el idioma activo:
   - `formatLongDate(date, locale, withYear?)` → "Martes, 30 de septiembre".
   - `formatMonthYear(year, month, locale)` → "Septiembre de 2026".
@@ -218,34 +273,13 @@ Todas las llamadas usan el cliente axios de `lib/api/api.ts` (base `${NEXT_PUBLI
 
 ## Limitaciones conocidas y pendientes
 
-**Usuario de los eventos guardados**
+**Datos y permisos**
 
-- `SaveEventButton`, `/events/[id]` y `/my-events` usan el usuario fijo `ConsumerUser` en vez del usuario de la sesión. Cuando el backend verifique el JWT (ver [autenticacion.md](autenticacion.md#pendiente)), hay que:
-  - cambiar a rutas `/api/me/saved-events`, en las que Go saca el usuario del token;
-  - enviar el JWT desde los Server Components (`auth.api.getToken({ headers: await headers() })`), porque el interceptor de axios solo lo añade en el navegador;
-  - ocultar o redirigir a `/login` las acciones de guardar cuando no hay sesión.
-- `isEventSaved` descarga la lista completa de eventos guardados para comprobar uno solo.
-
-**Datos y rendimiento**
-
-- `/` y `/calendar` descargan todos los eventos y filtran en el cliente, aunque la API ya admite `?date=` y `?category=`.
-- `/` pierde un posible error de carga (`console.error`) y lo muestra como "no hay eventos".
+- No hay URL de venta de entradas en el modelo de datos, por eso el detalle solo muestra una nota informativa. Cuando exista, se puede volver a poner un botón de compra.
+- Los `publisher` pueden crear, editar y borrar eventos en la API, pero no tienen interfaz para hacerlo: `/admin` es solo para `admin`.
+- El panel de admin carga **todos** los eventos (`getEvents()` sin filtros) en una sola tabla, sin paginación.
+- "Más eventos de …" en el detalle pide todos los eventos de la categoría y se queda con los 3 primeros por fecha, que pueden ser eventos ya pasados.
 
 **Fechas**
 
-- En `/` y en `CalendarWidget`, `toISODateStr` usa `toISOString()`, que da la fecha en **UTC**. Justo después de medianoche en España (UTC+1/+2), el día de "hoy" se interpreta como el día anterior. Los días que se eligen en el calendario no se ven afectados, porque se crean a las 12:00.
-- `/calendar` empieza siempre en octubre de 2024.
-- `hasEnded` (en `/my-events`) compara con la hora del servidor, no con la del usuario.
-- `EventCard` formatea la fecha corta siempre en inglés (`"en-US"`).
-
-**Mapa**
-
-- Todos los marcadores tienen el mismo color. Hay un `TODO` en `MapView` para colorearlos por categoría con `LEGEND_ITEMS`, a la que además le falta `Sports`.
-- El mapa de `/calendar` y el mapa móvil de `/` se muestran sin eventos.
-
-**Interfaz sin funcionalidad todavía**
-
-- En el detalle: los botones de compartir y de comprar entradas no hacen nada, y "Se agotan rápido" se muestra siempre.
-- El marcador de la tarjeta con imagen (`EventCard`) no guarda nada y depende de `isSaved`, que la API no rellena.
-- "Approximate location" en `EventCard` está en inglés fijo, aunque existe la clave `common.approximateLocation`.
-- Los colores de categoría están repetidos en `EventCard` (`CATEGORY_COLORS`), `/events/[id]`, `/calendar` (`CATEGORY_DOT_COLORS`) y `MapView` (`LEGEND_ITEMS`).
+- `/` es un componente cliente, pero Next.js lo prerenderiza en el servidor: la fecha de "hoy" (`new Date()`) se calcula en el servidor y otra vez en el navegador. Si no coinciden (cerca de medianoche, o si el servidor está en otra zona horaria), puede haber un error de hidratación en la cabecera con la fecha y en el mini calendario.

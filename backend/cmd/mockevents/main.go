@@ -27,10 +27,7 @@ func main() {
 
 	if *toDB {
 		database.Init(".env")
-		s, err := store.NewEventStore(database.DB)
-		if err != nil {
-			log.Fatalf("event store: %v", err)
-		}
+		s := store.NewEventStore(database.DB)
 		inserted := 0
 		for _, e := range events {
 			if err := s.Create(e); err != nil {

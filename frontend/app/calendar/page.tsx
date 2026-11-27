@@ -1,41 +1,27 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, Map as MapIcon, CalendarDays } from "lucide-react";
 import CategoryFilter from "@/components/CategoryFilter";
+import LoadError from "@/components/LoadError";
 import MapView from "@/components/MapView";
-import { getEvents } from "@/lib/api/events";
-import { Event, EventCategory } from "@/lib/types";
+import { Event } from "@/lib/types";
+import { CATEGORIES, categoryColor } from "@/lib/categories";
+import { monthRange, startOfMonth, toISODateStr } from "@/lib/dates";
+import { useEvents } from "@/lib/hooks/useEvents";
 import { formatMonthYear, weekdayNames } from "@/i18n/format";
-
-const CATEGORY_DOT_COLORS: Record<EventCategory, string> = {
-  Music: "#8b5cf6",
-  Theater: "#3b82f6",
-  Parties: "#ec4899",
-  Sports: "#22c55e",
-  Food: "#eab308",
-  Art: "#f43f5e",
-  Wellness: "#14b8a6",
-};
-
-function toISODateStr(year: number, month: number, day: number) {
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
 
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
-  const [viewDate, setViewDate] = useState(new Date(2024, 9, 1)); // October 2024
+  const [viewDate, setViewDate] = useState(() => startOfMonth(new Date()));
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [showMap, setShowMap] = useState(false);
-  const [allEvents, setAllEvents] = useState<Event[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-  useEffect(() => {
-    getEvents()
-      .then((r) => setAllEvents(r.events))
-      .catch(console.error);
-  }, []);
+  // Only the visible month, already filtered by category in the API
+  const { events: monthEvents, error, retry } = useEvents({ ...monthRange(viewDate), category: selectedCategory });
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
@@ -46,6 +32,9 @@ export default function CalendarPage() {
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
 
   const cells = useMemo(() => {
+    const byDate = new Map<string, Event[]>();
+    for (const e of monthEvents) byDate.set(e.date, [...(byDate.get(e.date) ?? []), e]);
+
     const result: { day: number | null; dateStr: string | null; events: Event[] }[] = [];
 
     for (let i = 0; i < firstDay; i++) {
@@ -53,16 +42,13 @@ export default function CalendarPage() {
     }
 
     for (let d = 1; d <= daysInMonth; d++) {
-      const dateStr = toISODateStr(year, month, d);
-      let events = allEvents.filter((e) => e.date === dateStr);
-      if (selectedCategory !== "All") {
-        events = events.filter((e) => e.category === selectedCategory);
-      }
+      const dateStr = toISODateStr(new Date(year, month, d));
+      const events = (byDate.get(dateStr) ?? []).sort((a, b) => a.startTime.localeCompare(b.startTime));
       result.push({ day: d, dateStr, events });
     }
 
     return result;
-  }, [year, month, firstDay, daysInMonth, selectedCategory, allEvents]);
+  }, [year, month, firstDay, daysInMonth, monthEvents]);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -137,8 +123,15 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {showMap ? (
-        <MapView />
+      {error ? (
+        <LoadError onRetry={retry} />
+      ) : showMap ? (
+        <MapView
+          events={monthEvents}
+          selectedEventId={selectedEventId}
+          onSelectEvent={setSelectedEventId}
+          className="h-[32rem]"
+        />
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {/* Day headers */}
@@ -154,7 +147,7 @@ export default function CalendarPage() {
           <div className="grid grid-cols-7 divide-x divide-gray-50">
             {cells.map(({ day, dateStr, events }, i) => (
               <div
-                key={i}
+                key={dateStr ?? `empty-${i}`}
                 className={`min-h-28 p-2 border-b border-gray-50 ${
                   !day ? "bg-gray-50/50" : "hover:bg-orange-50/30 transition-colors"
                 }`}
@@ -167,7 +160,7 @@ export default function CalendarPage() {
                         <Link key={event.id} href={`/events/${event.id}`} className="block">
                           <div
                             className="text-xs px-1.5 py-0.5 rounded text-white truncate font-medium hover:opacity-90 transition-opacity"
-                            style={{ backgroundColor: CATEGORY_DOT_COLORS[event.category] ?? "#6b7280" }}
+                            style={{ backgroundColor: categoryColor(event.category) }}
                           >
                             {event.title}
                           </div>
@@ -186,11 +179,11 @@ export default function CalendarPage() {
       )}
 
       {/* Map toggle: show legend below when in map mode */}
-      {!showMap && (
+      {!showMap && !error && (
         <div className="mt-4 flex flex-wrap gap-3">
-          {(Object.entries(CATEGORY_DOT_COLORS) as [EventCategory, string][]).map(([label, color]) => (
+          {CATEGORIES.map((label) => (
             <div key={label} className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
+              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: categoryColor(label) }} />
               <span className="text-xs text-gray-500">{t(`categories.${label}`)}</span>
             </div>
           ))}

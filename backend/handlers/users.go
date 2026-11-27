@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/Mario-Miguel/folixenda/backend/auth"
+	"github.com/Mario-Miguel/folixenda/backend/middleware"
 	"github.com/Mario-Miguel/folixenda/backend/models"
 	"github.com/Mario-Miguel/folixenda/backend/store"
 )
@@ -17,11 +19,19 @@ func NewUsersHandler(s store.UserStore) *UsersHandler {
 	return &UsersHandler{store: s}
 }
 
-func (h *UsersHandler) Register(mux *http.ServeMux, protect func(h http.Handler) http.Handler) {
-	mux.Handle("GET /api/users", protect(http.HandlerFunc(h.list)))
-	mux.Handle("GET /api/users/{id}", protect(http.HandlerFunc(h.get)))
-	mux.Handle("PUT /api/users/{id}", protect(http.HandlerFunc(h.update)))
-	mux.Handle("DELETE /api/users/{id}", protect(http.HandlerFunc(h.delete)))
+// Register mounts the users routes, all authenticated:
+//   - list:         admin only
+//   - get / update: admin, or the user themself
+//
+// There is no DELETE: users are deleted in Better Auth (frontend admin panel)
+// and the profile goes with them via ON DELETE CASCADE on users.id.
+func (h *UsersHandler) Register(mux *http.ServeMux, protect Middleware) {
+	adminOnly := middleware.RequireRole(auth.RoleAdmin)
+	selfOrAdmin := middleware.RequireSelfOrRole("id", auth.RoleAdmin)
+
+	mux.Handle("GET /api/users", chain(h.list, protect, adminOnly))
+	mux.Handle("GET /api/users/{id}", chain(h.get, protect, selfOrAdmin))
+	mux.Handle("PUT /api/users/{id}", chain(h.update, protect, selfOrAdmin))
 }
 
 func (h *UsersHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -50,34 +60,50 @@ func (h *UsersHandler) get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 
+// update applies a partial update: fields present in the JSON body overwrite
+// the stored profile, absent ones are kept. id and email are owned by Better
+// Auth and always kept. Only admins can change the role; for anyone else the
+// "role" field is ignored. The store mirrors name/role into auth."user".
 func (h *UsersHandler) update(w http.ResponseWriter, r *http.Request) {
+	claims := GetClaimsFromRequest(w, r)
+	if claims == nil {
+		return
+	}
 	id := r.PathValue("id")
-	var u models.User
+	existing, err := h.store.Get(id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to fetch user")
+		return
+	}
+
+	u := *existing
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	u.ID = id
+	u.ID = existing.ID
+	u.Email = existing.Email
+	if !claims.IsAdmin() {
+		u.Role = existing.Role
+	} else if !auth.ValidRole(u.Role) {
+		writeError(w, http.StatusBadRequest, "role must be one of admin, consumer, publisher")
+		return
+	}
+
 	if err := h.store.Update(&u); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+		switch {
+		case errors.Is(err, store.ErrNotFound):
 			writeError(w, http.StatusNotFound, "user not found")
-			return
+		case errors.Is(err, store.ErrConflict):
+			writeError(w, http.StatusConflict, "conflicting user data")
+		default:
+			writeError(w, http.StatusInternalServerError, "failed to update user")
 		}
-		writeError(w, http.StatusInternalServerError, "failed to update user")
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
-}
-
-func (h *UsersHandler) delete(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if err := h.store.Delete(id); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "user not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to delete user")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }

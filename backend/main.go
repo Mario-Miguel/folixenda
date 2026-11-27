@@ -14,6 +14,7 @@ import (
 	"github.com/Mario-Miguel/folixenda/backend/database"
 	"github.com/Mario-Miguel/folixenda/backend/handlers"
 	"github.com/Mario-Miguel/folixenda/backend/middleware"
+	"github.com/Mario-Miguel/folixenda/backend/migrations"
 	"github.com/Mario-Miguel/folixenda/backend/store"
 )
 
@@ -27,22 +28,20 @@ func main() {
 
 	//INIT DB
 	database.Init(".env")
-	eventStore, err := store.NewEventStore(database.DB)
+
+	// Apply pending schema migrations (backend/migrations) before serving.
+	migrated, err := migrations.Up(context.Background(), database.DB)
 	if err != nil {
-		logger.Error("failed to init event store", "err", err)
+		logger.Error("failed to apply migrations", "err", err)
 		os.Exit(1)
 	}
-	userStore, err := store.NewPostgresUserStore(database.DB)
-	if err != nil {
-		logger.Error("failed to init user store", "err", err)
-		os.Exit(1)
+	for _, m := range migrated {
+		logger.Info("migration applied", "version", m.Source.Version, "file", m.Source.Path, "took", m.Duration)
 	}
 
-	savedEventsStore, err := store.NewUserSavedEventsStore(database.DB)
-	if err != nil {
-		logger.Error("failed to init user store", "err", err)
-		os.Exit(1)
-	}
+	eventStore := store.NewEventStore(database.DB)
+	userStore := store.NewPostgresUserStore(database.DB)
+	savedEventsStore := store.NewUserSavedEventsStore(database.DB)
 
 	// FINISHED CREATING DB
 

@@ -30,7 +30,9 @@
     "approximateLocation": "Approximate location",
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
-    "moreCount": "+{{count}} more"
+    "moreCount": "+{{count}} more",
+    "loadEventsError": "Couldn't load the events",
+    "retry": "Try again"
   },
   "categories": {
     "All": "All",
@@ -70,8 +72,10 @@
     "whatsIncluded": "What's included",
     "price": "Price",
     "perPerson": "per person",
-    "sellingFast": "🔥 Selling Fast",
-    "registerFree": "Register for free",
+    "ticketsInfo": "Tickets are sold by the organizer or the venue.",
+    "freeEntryInfo": "Free entry. Check with the organizer whether registration is required.",
+    "linkCopied": "Link copied",
+    "shareError": "Couldn't copy the link",
     "saveForLater": "Save for later",
     "saved": "Saved",
     "moreCategoryEvents": "More {{category}} events"
@@ -79,10 +83,11 @@
   "admin": {
     "access": "Admin access",
     "noAdminAccess": "This account does not have admin access.",
-    "wrongCredentials": "Wrong username or password.",
-    "genericError": "Something went wrong. Please try again.",
-    "signIn": "Sign in",
-    "signingIn": "Signing in…",
+    "backHome": "Back to home",
+    "errors": {
+      "forbidden": "You don't have permission to do this.",
+      "unauthorized": "Your session has expired. Please log in again."
+    },
     "dashboard": "Admin Dashboard",
     "loggedInAs": "Logged in as {{name}}",
     "logOut": "Log out",
@@ -92,11 +97,8 @@
     },
     "fields": {
       "name": "Name",
-      "username": "Username",
       "email": "Email",
       "role": "Role",
-      "password": "Password",
-      "newPassword": "New password (leave blank to keep)",
       "title": "Title",
       "description": "Description",
       "category": "Category",
@@ -117,19 +119,20 @@
     "users": {
       "count_one": "{{count}} user",
       "count_other": "{{count}} users",
-      "new": "New user",
       "edit": "Edit user",
-      "confirmDelete": "Delete user \"{{name}}\"?",
+      "loadFailed": "Failed to load users.",
+      "confirmDelete": "Delete user \"{{name}}\"? Their account, sessions and saved events will be deleted. This can't be undone.",
       "deleted": "User deleted.",
       "deleteFailed": "Failed to delete user.",
+      "deleteSelf": "You can't delete your own user.",
+      "notFound": "This user no longer exists.",
       "updated": "User updated.",
-      "updateFailed": "Failed to update user.",
-      "created": "User created.",
-      "createFailed": "Failed to create user."
+      "updateFailed": "Failed to update user."
     },
     "events": {
       "new": "New event",
       "edit": "Edit event",
+      "loadFailed": "Failed to load events.",
       "confirmDelete": "Delete event \"{{title}}\"?",
       "deleted": "Event deleted.",
       "deleteFailed": "Failed to delete event.",
